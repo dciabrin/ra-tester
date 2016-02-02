@@ -398,8 +398,7 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
         # restart cluster, ensure recovered node was not selected as
         # bootstrap. TODO: ensure it joined cluster via SST
         patterns = [r"Node (?!<%s>).*is bootstrapping the cluster"%target,
-                    r"local node.*was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover",
-                    r"State recovered. force SST at next restart for full resynchronization"]
+                    r"local node.*was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover"]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         ClusterStart.test(self,target)
