@@ -1,0 +1,8 @@
+# python stuff
+*.py[cod]
+.python-version
+
+# editor
+*~
+\#*#
+.#*
