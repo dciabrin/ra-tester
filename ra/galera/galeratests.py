@@ -51,30 +51,39 @@ class GaleraScenario(ReuseCluster):
         ReuseCluster.__init__(self, environment)
         self.rsh = RemoteFactory().getInstance()
         self.log = LogFactory()
-        self.gdb_kill_script = "gdb-force-kill.cmd"
-        
+
     def IsApplicable(self):
         return 1
 
     def SetUp(self, cluster_manager):
         # pre-requisites
-        prerequisite = ["/usr/bin/gdb", "/usr/bin/screen"]
+        prerequisite = ["/usr/bin/gdb", "/usr/bin/screen", "/usr/bin/dig"]
+        missing_reqs = False
         for req in prerequisite:
-            if not self.rsh.exists_on_all(req,self.Env["nodes"]):
+            if not self.rsh.exists_on_all(req, self.Env["nodes"]):
                 self.log.log("error: %s could not be found on remote nodes."
                              "Please install the necessary package to run the tests"%  req)
-                return 0
+                missing_reqs = True
+        if missing_reqs:
+            return 0
 
         # galera-specific data
+        test_scripts = ["gdb-force-kill.cmd", "slow_down_sst.sh"]
         for node in self.Env["nodes"]:
-            src = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               self.gdb_kill_script)
-            rc = self.rsh.cp(src, "root@%s:/tmp/%s" % (node, self.gdb_kill_script))
-            if rc != 0:
-                self.log.log("error: could not copy test data \"%s\" on remote node \"%s\"" % \
-                             (src, node))
+            for script in test_scripts:
+                src = os.path.join(os.path.dirname(os.path.abspath(__file__)), script)
+                rc = self.rsh.cp(src, "root@%s:/tmp/%s" % (node, script))
+                if rc != 0:
+                    self.log.log("error: could not copy test data \"%s\" on remote node \"%s\"" % \
+                                 (src, node))
+                    return 0
+
+        # clean up any traffic control on target network interface
+        for node in self.Env["nodes"]:
+            res=self.rsh(node, "/tmp/slow_down_sst.sh -n %s off || true"%node)
+            if res != 0:
                 return 0
-            
+
         return 1
 
     def TearDown(self, cluster_manager):
@@ -505,3 +514,107 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
 
 
 tests.append(ClusterRestartAfterAllNodesRecovered)
+
+
+class NodeLongRunningSST(ClusterStart):
+    '''Ensure that a long running SST can finish without being killed by
+       start or promote timeout
+       It is assumed nodes are in sync prior to this test
+    '''
+
+    def __init__(self, cm):
+        GaleraTest.__init__(self,cm)
+        self.name = "NodeLongRunningSST"
+
+    def create_big_file(self, node):
+        self.rsh_check(node, "mkdir -p /var/lib/mysql/big_file && dd if=/dev/urandom bs=1024 count=200000 of=/var/lib/mysql/big_file/for_sst && chown -R mysql. /var/lib/mysql/big_file")
+
+    def prepare_node_for_sst(self, node):
+        # force SST at restart for the target
+        self.rsh_check(node, "rm -f /var/lib/mysql/grastate.dat")
+
+        # ensure node won't be chosen as a the bootstrap node,
+        # this is correct as per test `NodeRecoverWhileStartingCluster`
+        self.crm_attr_set(node, "galera-heuristic-recovered", "true")
+
+    def setup_test(self, target):
+        ClusterStart.setup_test(self, target)
+        # TODO: ensure all nodes are in sync (same wsrep seqno)
+
+        # in this test, target is the joiner
+        for node in self.Env["nodes"]:
+            self.rsh_check(node, "/tmp/slow_down_sst.sh -n %s on"%node)
+            # create big file on potential donor nodes
+            if node != target:
+                self.create_big_file(node)
+
+        self.prepare_node_for_sst(target)
+
+    def test(self, target):
+        # start cluster and ensure that target wait sufficiently
+        # long that a monitor op catched it during sync
+        patterns = [r"%s.*INFO: local node syncing"%target,
+                    r"%s.*INFO: local node synced with the cluster"%target]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        ClusterStart.test(self, target)
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+
+    def teardown_test(self, target):
+        for node in self.Env["nodes"]:
+            self.rsh_check(node, "/tmp/slow_down_sst.sh -n %s off || true"%node)
+            self.rsh_check(node, "rm -rf /var/lib/mysql/big_file")
+        ClusterStart.teardown_test(self, target)
+
+tests.append(NodeLongRunningSST)
+
+
+class ClusterStartWill2LongRunningSST(NodeLongRunningSST):
+    '''Ensure that all joiner can finish long running SST without being killed by
+       start or promote timeout or wsrep protocol itself
+
+       Having only one donor available (the bootstrap node), SST will
+       be sequential: one joiner will fail to get an available donor, and retry
+       every second until donor is available again.
+       It is assumed nodes are in sync prior to this test
+    '''
+
+    def __init__(self, cm):
+        GaleraTest.__init__(self,cm)
+        self.name = "ClusterStartWill2LongRunningSST"
+
+    def setup_test(self, target):
+        ClusterStart.setup_test(self, target)
+
+        # TODO: ensure all nodes are in sync (same wsrep seqno)
+
+        # in this test, target is the donor
+        for node in self.Env["nodes"]:
+            self.rsh_check(node, "/tmp/slow_down_sst.sh -n %s on"%node)
+            if node == target:
+                self.create_big_file(node)
+            else:
+                self.prepare_node_for_sst(node)
+
+    def test(self, target):
+        patterns = []
+        # start cluster and ensure that all joiners run SST
+        for joiner in [n for n in self.Env["nodes"] if n != target]:
+            patterns.extend([r"%s.*INFO: local node syncing"%joiner,
+                             r"%s.*INFO: local node synced with the cluster"%joiner])
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        ClusterStart.test(self, target)
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+
+        # TODO: check log "wait for available donor" in mysqld.log
+
+    def teardown_test(self, target):
+        for node in self.Env["nodes"]:
+            self.rsh_check(node, "/tmp/slow_down_sst.sh -n %s off || true"%node)
+            self.rsh_check(node, "rm -rf /var/lib/mysql/big_file")
+        ClusterStart.teardown_test(self, target)
+
+tests.append(ClusterStartWill2LongRunningSST)
