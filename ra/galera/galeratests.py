@@ -68,7 +68,7 @@ class GaleraScenario(ReuseCluster):
             return 0
 
         # galera-specific data
-        test_scripts = ["gdb-force-kill.cmd", "slow_down_sst.sh"]
+        test_scripts = ["kill-during-txn.gdb", "slow_down_sst.sh"]
         for node in self.Env["nodes"]:
             for script in test_scripts:
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), script)
@@ -185,6 +185,7 @@ class ClusterStop(ClusterStart):
             self.crm_attr_check(target, "galera-last-committed", expected = 6)
             self.crm_attr_check(target, "galera-bootstrap", expected = 6)
             self.crm_attr_check(target, "galera-sync-needed", expected = 6)
+            self.crm_attr_check(target, "galera-no-grastate", expected = 6)
 
 tests.append(ClusterStop)
 
@@ -237,6 +238,9 @@ class NodeForceStartBootstrap(GaleraTest):
         # a bootstrap node never requires sync-ing
         self.crm_attr_check(target, "sync-needed", expected = 6)
 
+        # once a node is running, boot status should be cleared
+        self.crm_attr_check(target, "no-grastate", expected = 6)
+
 tests.append(NodeForceStartBootstrap)
 
 
@@ -272,7 +276,9 @@ class NodeForceStartJoining(ClusterStart):
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
-        # "promote" op for joining node is a no-op.
+        # "promote" op for joining node is almost a no-op, though
+        # once a node is running, boot status should be cleared
+        self.crm_attr_check(node, "no-grastate", expected = 6)
 
 tests.append(NodeForceStartJoining)
 
@@ -332,7 +338,7 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
 
         # prepare data to trigger a kill
         self.rsh_check(target, "mysql -e 'drop database if exists racts; drop table if exists racts.break; create database racts; create table racts.break (i int) engine=innodb;'");
-        self.rsh_bg(target, "gdb --batch -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
+        self.rsh_bg(target, "gdb -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
 
         # racy sleep to allow gdb to engage
         time.sleep(3)
@@ -353,7 +359,67 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
             r"ERROR: MySQL not running: removing old PID file",
         ]
 
-#tests.append(NodeRecoverWhileClusterIsRunning)
+tests.append(NodeRecoverWhileClusterIsRunning)
+
+
+class NodeDontChooseForBootstrappingCluster(ClusterStart):
+    '''Ensure that a node which is missing grastate.dat will
+    not be choosing if other node can bootstrap the cluster.
+    '''
+    def __init__(self, cm):
+        GaleraTest.__init__(self,cm)
+        self.name = "NodeDontChooseForBootstrappingCluster"
+
+    def test(self, target):
+        # The bootstrap node selection is an ordered process,
+        # if all nodes are in sync, node3 shall be selected.
+        # removing grastate from node3 will have the effect
+        # of selecting node2 to bootstrap
+        target = self.Env["nodes"][-1]
+        self.rsh_check(target, "rm -f /var/lib/mysql/grastate.dat")
+
+        target_bootstrap = self.Env["nodes"][-2]
+        # start cluster and ensure that target wait sufficiently
+        # long that a monitor op catched it during sync
+        patterns = [r".*INFO: Node <%s> is bootstrapping the cluster"%target_bootstrap]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        ClusterStart.test(self, target)
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+        # the transient boot state tracking attribute should be cleared
+        # once node3 is running as Master
+        self.crm_attr_check(target, "galera-no-grastate", expected = 6)
+
+tests.append(NodeDontChooseForBootstrappingCluster)
+
+
+class ClusterBootWithoutGrastateOnDisk(ClusterStart):
+    '''Ensure that the cluster will boot even if no grastate.dat can
+    be found on any of the nodes.
+    '''
+    def __init__(self, cm):
+        GaleraTest.__init__(self,cm)
+        self.name = "ClusterBootWithoutGrastateOnDisk"
+
+    def test(self, target):
+        for n in self.Env["nodes"]:
+            self.rsh_check(n, "rm -f /var/lib/mysql/grastate.dat")
+
+        # The bootstrap node selection is an ordered process,
+        # if all nodes are in sync, node3 shall be selected.
+        target_bootstrap = self.Env["nodes"][-1]
+        patterns = [r".*INFO: Node <%s> is bootstrapping the cluster"%target_bootstrap]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        ClusterStart.test(self, target)
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+        # the transient boot state tracking attribute should be cleared
+        for n in self.Env["nodes"]:
+            self.crm_attr_check(n, "galera-no-grastate", expected = 6)
+
+tests.append(ClusterBootWithoutGrastateOnDisk)
 
 
 class NodeRecoverWhileStartingCluster(ClusterStart):
@@ -368,7 +434,7 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
 
         # prepare data to trigger a kill
         self.rsh_check(target, "mysql -e 'drop database if exists racts; drop table if exists racts.break; create database racts; create table racts.break (i int) engine=innodb;'");
-        self.rsh_bg(target, "gdb --batch -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
+        self.rsh_bg(target, "gdb -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
 
         # set galera management away of pacemaker's control
         self.rsh_check(target, "pcs resource unmanage galera")
@@ -394,7 +460,6 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
         # clean up errors in cib before re-enabling pacemaker,
         # this will also prevent pacemaker to try to restart the
         # killed node before stop. (TODO: am i correct here?)
-        # won't try to  pacemaker to stop the cluster and
         patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "stop", n) \
                     for n in self.Env["nodes"] if n != target]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
@@ -413,14 +478,14 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
         ClusterStart.test(self,target)
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
-        self.crm_attr_check(target, "galera-heuristic-recovered", expected = 6)
+        self.crm_attr_check(target, "galera-no-grastate", expected = 6)
 
     def errorstoignore(self):
         return GaleraTest.errorstoignore(self) + [
             r"ERROR: MySQL not running: removing old PID file",
         ]
 
-#tests.append(NodeRecoverWhileStartingCluster)
+tests.append(NodeRecoverWhileStartingCluster)
 
 
 class ClusterRestartAfter2RecoveredNodes(ClusterStart):
@@ -438,7 +503,7 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
         # prepare data to trigger a kill
         self.rsh_check(target, "mysql -e 'drop database if exists racts; drop table if exists racts.break; create database racts; create table racts.break (i int) engine=innodb;'");
         for node in to_break:
-            self.rsh_bg(node, "gdb --batch -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
+            self.rsh_bg(node, "gdb -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
 
         # racy sleep to allow gdb to engage
         time.sleep(3)
@@ -459,7 +524,7 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
 
         # ensure recovered state is cleaned up
         for node in to_break:
-            self.crm_attr_check(node, "galera-heuristic-recovered", expected = 6)
+            self.crm_attr_check(node, "galera-no-grastate", expected = 6)
 
     def errorstoignore(self):
         return GaleraTest.errorstoignore(self) + [
@@ -467,7 +532,7 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
             r"local node <.*> is started, but not in primary mode. Unknown state."
         ]
 
-#tests.append(ClusterRestartAfter2RecoveredNodes)
+tests.append(ClusterRestartAfter2RecoveredNodes)
 
 
 class ClusterRestartAfterAllNodesRecovered(ClusterStart):
@@ -485,7 +550,7 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
         # prepare data to trigger a kill
         self.rsh_check(target, "mysql -e 'drop database if exists racts; drop table if exists racts.break; create database racts; create table racts.break (i int) engine=innodb;'");
         for node in all_nodes:
-            self.rsh_bg(node, "gdb --batch -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
+            self.rsh_bg(node, "gdb -x /tmp/kill-during-txn.gdb -p `cat /var/run/mysql/mysqld.pid`")
 
         # racy sleep to allow gdb to engage
         time.sleep(3)
@@ -505,7 +570,7 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
 
         # ensure recovered state is cleaned up
         for node in all_nodes:
-            self.crm_attr_check(node, "galera-heuristic-recovered", expected = 6)
+            self.crm_attr_check(node, "galera-no-grastate", expected = 6)
 
     def errorstoignore(self):
         return GaleraTest.errorstoignore(self) + [
@@ -513,7 +578,7 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
         ]
 
 
-#tests.append(ClusterRestartAfterAllNodesRecovered)
+tests.append(ClusterRestartAfterAllNodesRecovered)
 
 
 class NodeLongRunningSST(ClusterStart):
@@ -530,18 +595,15 @@ class NodeLongRunningSST(ClusterStart):
         self.rsh_check(node, "mkdir -p /var/lib/mysql/big_file && dd if=/dev/urandom bs=1024 count=200000 of=/var/lib/mysql/big_file/for_sst && chown -R mysql. /var/lib/mysql/big_file")
 
     def prepare_node_for_sst(self, node):
-        # force SST at restart for the target
+        # force SST at restart for the target, and ensure
+        # node won't be chosen as a the bootstrap node,
+        # this is correct as per test `NodeDontChooseForBootstrappingCluster`
         self.rsh_check(node, "rm -f /var/lib/mysql/grastate.dat")
-
-        # ensure node won't be chosen as a the bootstrap node,
-        # this is correct as per test `NodeRecoverWhileStartingCluster`
-        # tmp: can only work w/ ra patch "prevent bootstrapping w/ recovered"
-        # self.crm_attr_set(node, "galera-heuristic-recovered", "true")
 
     def setup_test(self, target):
         # tmp hack: make first node the target, it can be
         # any node when we integrate "prevent bootstrapping w/ recovered"
-        target = self.Env["nodes"][0]
+        # target = self.Env["nodes"][0]
 
         ClusterStart.setup_test(self, target)
         # TODO: ensure all nodes are in sync (same wsrep seqno)
@@ -558,7 +620,7 @@ class NodeLongRunningSST(ClusterStart):
     def test(self, target):
         # tmp hack: make first node the target, it can be
         # any node when we integrate "prevent bootstrapping w/ recovered"
-        target = self.Env["nodes"][0]
+        # target = self.Env["nodes"][0]
 
         # start cluster and ensure that target wait sufficiently
         # long that a monitor op catched it during sync
@@ -596,7 +658,7 @@ class ClusterStartWith2LongRunningSST(NodeLongRunningSST):
     def setup_test(self, target):
         # tmp hack: make last node the target, it can be
         # any node when we integrate "prevent bootstrapping w/ recovered"
-        target = self.Env["nodes"][-1]
+        # target = self.Env["nodes"][-1]
 
         ClusterStart.setup_test(self, target)
 
@@ -613,7 +675,7 @@ class ClusterStartWith2LongRunningSST(NodeLongRunningSST):
     def test(self, target):
         # tmp hack: make last node the target, it can be
         # any node when we integrate "prevent bootstrapping w/ recovered"
-        target = self.Env["nodes"][-1]
+        # target = self.Env["nodes"][-1]
 
         patterns = []
         # start cluster and ensure that all joiners run SST

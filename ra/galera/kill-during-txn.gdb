@@ -12,3 +12,4 @@ silent
 finish_and_kill
 end
 
+continue
