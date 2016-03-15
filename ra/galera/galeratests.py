@@ -353,7 +353,7 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
             r"ERROR: MySQL not running: removing old PID file",
         ]
 
-tests.append(NodeRecoverWhileClusterIsRunning)
+#tests.append(NodeRecoverWhileClusterIsRunning)
 
 
 class NodeRecoverWhileStartingCluster(ClusterStart):
@@ -420,7 +420,7 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
             r"ERROR: MySQL not running: removing old PID file",
         ]
 
-tests.append(NodeRecoverWhileStartingCluster)
+#tests.append(NodeRecoverWhileStartingCluster)
 
 
 class ClusterRestartAfter2RecoveredNodes(ClusterStart):
@@ -467,7 +467,7 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
             r"local node <.*> is started, but not in primary mode. Unknown state."
         ]
 
-tests.append(ClusterRestartAfter2RecoveredNodes)
+#tests.append(ClusterRestartAfter2RecoveredNodes)
 
 
 class ClusterRestartAfterAllNodesRecovered(ClusterStart):
@@ -513,7 +513,7 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
         ]
 
 
-tests.append(ClusterRestartAfterAllNodesRecovered)
+#tests.append(ClusterRestartAfterAllNodesRecovered)
 
 
 class NodeLongRunningSST(ClusterStart):
@@ -535,9 +535,14 @@ class NodeLongRunningSST(ClusterStart):
 
         # ensure node won't be chosen as a the bootstrap node,
         # this is correct as per test `NodeRecoverWhileStartingCluster`
-        self.crm_attr_set(node, "galera-heuristic-recovered", "true")
+        # tmp: can only work w/ ra patch "prevent bootstrapping w/ recovered"
+        # self.crm_attr_set(node, "galera-heuristic-recovered", "true")
 
     def setup_test(self, target):
+        # tmp hack: make first node the target, it can be
+        # any node when we integrate "prevent bootstrapping w/ recovered"
+        target = self.Env["nodes"][0]
+
         ClusterStart.setup_test(self, target)
         # TODO: ensure all nodes are in sync (same wsrep seqno)
 
@@ -551,6 +556,10 @@ class NodeLongRunningSST(ClusterStart):
         self.prepare_node_for_sst(target)
 
     def test(self, target):
+        # tmp hack: make first node the target, it can be
+        # any node when we integrate "prevent bootstrapping w/ recovered"
+        target = self.Env["nodes"][0]
+
         # start cluster and ensure that target wait sufficiently
         # long that a monitor op catched it during sync
         patterns = [r"%s.*INFO: local node syncing"%target,
@@ -570,7 +579,7 @@ class NodeLongRunningSST(ClusterStart):
 tests.append(NodeLongRunningSST)
 
 
-class ClusterStartWill2LongRunningSST(NodeLongRunningSST):
+class ClusterStartWith2LongRunningSST(NodeLongRunningSST):
     '''Ensure that all joiner can finish long running SST without being killed by
        start or promote timeout or wsrep protocol itself
 
@@ -582,9 +591,13 @@ class ClusterStartWill2LongRunningSST(NodeLongRunningSST):
 
     def __init__(self, cm):
         GaleraTest.__init__(self,cm)
-        self.name = "ClusterStartWill2LongRunningSST"
+        self.name = "ClusterStartWith2LongRunningSST"
 
     def setup_test(self, target):
+        # tmp hack: make last node the target, it can be
+        # any node when we integrate "prevent bootstrapping w/ recovered"
+        target = self.Env["nodes"][-1]
+
         ClusterStart.setup_test(self, target)
 
         # TODO: ensure all nodes are in sync (same wsrep seqno)
@@ -598,6 +611,10 @@ class ClusterStartWill2LongRunningSST(NodeLongRunningSST):
                 self.prepare_node_for_sst(node)
 
     def test(self, target):
+        # tmp hack: make last node the target, it can be
+        # any node when we integrate "prevent bootstrapping w/ recovered"
+        target = self.Env["nodes"][-1]
+
         patterns = []
         # start cluster and ensure that all joiners run SST
         for joiner in [n for n in self.Env["nodes"] if n != target]:
@@ -617,4 +634,4 @@ class ClusterStartWill2LongRunningSST(NodeLongRunningSST):
             self.rsh_check(node, "rm -rf /var/lib/mysql/big_file")
         ClusterStart.teardown_test(self, target)
 
-tests.append(ClusterStartWill2LongRunningSST)
+tests.append(ClusterStartWith2LongRunningSST)
