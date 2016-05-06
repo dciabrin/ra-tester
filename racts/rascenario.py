@@ -50,7 +50,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger = LogFactory()
         self.Env = environment
         self.verbose = verbose
-        
+
     def IsApplicable(self):
         return 1
 
@@ -77,10 +77,24 @@ class RATesterScenarioComponent(ScenarioComponent):
 
     def debug(self, args):
         self.logger.debug(args)
-    
+
     def rsh_check(self, target, command, expected = 0):
         if self.verbose: self.log("> [%s] %s"%(target,command))
         res=self.rsh(target, command+" &>/dev/null")
         assert res == expected, "\"%s\" returned %d"%(command,res)
 
 
+
+class SetupSTONITH(RATesterScenarioComponent):
+    def IsApplicable(self):
+        return self.Env.has_key("DoFencing")
+
+    def setup_scenario(self, cluster_manager):
+        cluster_manager.log("Enabling STONITH in cluster")
+        self.rsh_check(self.Env["nodes"][0], "pcs stonith create stonith fence_virsh ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key action=reboot pcmk_host_list=%s"%\
+                       (os.environ["USERNAME"], ",".join(self.Env["nodes"])))
+        self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=true")
+
+    def teardown_scenario(self, cluster_manager):
+        self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=false")
+        self.rsh_check(self.Env["nodes"][0], "pcs stonith delete stonith")

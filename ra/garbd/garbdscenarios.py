@@ -97,6 +97,7 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
         for node in self.Env["nodes"]:
             self.rsh(node, "pcs cluster destroy")
             self.rsh(node, "systemctl stop pacemaker_remote")
+            self.rsh(node, "systemctl enable pacemaker")
 
         # reconfigure cluster for 2-nodes + one remote arbitrator
         self.Env["arb"]=self.Env["nodes"][-1]
@@ -108,7 +109,10 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
         # TODO: better way to wait until cluster is started
         time.sleep(8)
 
+        # Disable STONITH by default. A dedicated ScenarioComponent
+        # is in charge of enabling it if requested
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=false")
+
         for node in self.Env["nodes"]:
             self.rsh_check(node, "pcs property set --node %s osprole=controller"%node)
 

@@ -2,7 +2,7 @@
 
 '''Resource Agents Tester
 
-A automated test shooter to validate the behaviour of OCF
+An automated test shooter to validate the behaviour of OCF
 resource agents.
 
 Relies on Pacemaker's Cluster Test Suite
@@ -39,6 +39,7 @@ from cts.logging   import LogFactory
 
 # TODO: dynamic test loading
 # from racts.ratest import ReuseCluster
+from racts.rascenario import SetupSTONITH
 import ra.galera
 import ra.garbd
 
@@ -88,7 +89,7 @@ def count_all_tests(scenarios, tests):
 
 
 if __name__ == '__main__':
-    env = CtsLab(sys.argv[1:])
+    env = CtsLab(["--stonith","no"]+sys.argv[1:])
     cluster_manager = crm_mcp(env)
     log=LogFactory()
     log.add_stderr()
@@ -96,6 +97,11 @@ if __name__ == '__main__':
     # TODO: dynamic test loading
     all_ra_modules = [ra.garbd]
     all_audits = AuditList(cluster_manager)
+
+    stonith = False
+    if env.has_key("DoFencing") and env["DoFencing"] != 0:
+        # TODO: make stonith settings configurable
+        stonith = True
 
     for i in [x for x in all_audits if isinstance(x,LogAudit)]:
         i.kinds = [ "journal", "remote" ]
@@ -165,10 +171,14 @@ if __name__ == '__main__':
             for c in scenario['components']:
                 c.verbose = True
 
+    if stonith:
+        setup_stonith = [SetupSTONITH(env, env.has_key("verbose"))]
+    else:
+        setup_stonith = []
+
     # Set the signal handler
     signal.signal(15, sig_handler)
     signal.signal(10, sig_handler)
-
 
     for s in selected:
         desc=selected[s]
@@ -184,7 +194,7 @@ if __name__ == '__main__':
             log.log("verbose mode will log cluster actions")
 
         scenario = desc['scenario'](cluster_manager,
-                                    desc['components'],
+                                    desc['components']+setup_stonith,
                                     all_audits,
                                     desc['tests'])
         env.dump()
