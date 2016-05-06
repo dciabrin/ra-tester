@@ -68,7 +68,7 @@ class GarbdRemoteTest(ResourceAgentTest):
 
         self.rsh_check(node, "pcs cluster cib garbd.xml")
         self.rsh_check(node,
-                       "pcs -f garbd.xml resource create garbd garbd wsrep_cluster_name='ratester' wsrep_cluster_address='gcomm://%s' op start timeout=30"% \
+                       "pcs -f garbd.xml resource create garbd garbd wsrep_cluster_name='ratester' wsrep_cluster_address='gcomm://%s' options='pc.announce_timeout=PT30s' op start timeout=30"% \
                        ",".join([x+":4567" for x in self.Env["nodes"]]))
         self.rsh_check(node, "pcs -f garbd.xml constraint location garbd rule resource-discovery=exclusive score=0 osprole eq arbitrator")
         self.rsh_check(node, "pcs -f garbd.xml constraint order start galera-master then start garbd")

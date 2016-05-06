@@ -55,16 +55,23 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
     def IsApplicable(self):
         return not self.Env.has_key("keep_cluster")
 
-    def copy_to_nodes(self, files, create_dir=False):
+    def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False):
         for node in self.Env["nodes"]:
             for localfile,remotefile in files:
                 if create_dir:
                     remotedir=os.path.dirname(remotefile)
-                    rc = self.rsh("mkdir -p %s" % remotedir)
+                    rc = self.rsh(node, "mkdir -p %s" % remotedir)
                     assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
                 rc = self.rsh.cp(src, "root@%s:%s" % (node, remotefile))
                 assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
+                if owner:
+                    rc = self.rsh(node, "chown %s %s" % (owner, remotefile))
+                    assert rc == 0, "change ownership of \"%s\" on remote node \"%s\"" % (src, node)
+                if perm:
+                    rc = self.rsh(node, "chmod %s %s" % (perm, remotefile))
+                    assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
+
 
     def setup_scenario(self, cluster_manager):
         # galera-specific data
@@ -82,7 +89,7 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
             with tempfile.NamedTemporaryFile() as tmp:
                 tmp.write(os.urandom(4096))
                 tmp.flush()
-                self.copy_to_nodes(tmp.name, remote_authkey, create_dir=True)
+                self.copy_to_nodes([(tmp.name, remote_authkey)], True, "root:haclient", "440")
 
         # cluster_manager.prepare()
 
