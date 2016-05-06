@@ -1,0 +1,6 @@
+DEVICE=eth1
+BOOTPROTO=static
+HWADDR=${CLUSTERMACPREFIX}${nodenum}
+IPADDR=${staticip}
+NETMASK=${netmask}
+ONBOOT=yes
