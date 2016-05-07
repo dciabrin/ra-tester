@@ -1,0 +1,38 @@
+<domain type='kvm'>
+  <name>${DOMNAME}</name>
+  <memory unit='MiB'>${VMRAM}</memory>
+  <vcpu>${VMCPU}</vcpu>
+  <os>
+    <type arch='x86_64'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none'/>
+      <source file='${IMGFULLPATH}'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <interface type='network'>
+      <mac address='${SSHMAC}'/>
+      <source network='${SSHNW}'/>
+      <model type='virtio'/>
+    </interface>
+    <interface type='network'>
+      <mac address='${CLUSTERMAC}'/>
+      <source network='${CLUSTERNW}'/>
+      <model type='virtio'/>
+    </interface>
+    <serial type='pty'/>
+    <console type='pty'/>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>    
+  </devices>
+</domain>

@@ -1,0 +1,330 @@
+#!/bin/bash
+
+# This file is part of ratester.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 3
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
+
+# ---- User config
+
+# path of the cloud image to use for creating VMs that will host the cluster
+IMG=
+
+# Name prefix for the VMs to be created.
+VMPREFIXNAME=ratester
+
+# libvirt networks to use for the VM. If those networks do not exist,
+# the script will create them.
+# A few notes on network properties:
+#   . The main network CLUSTERNW should have DHCP disabled, IP will
+#     be assigned by the script
+#   . A second network SSHNW can be provided to ease monitoring, e.g.
+#     when network conditions are simulated on network CLUSTERNW. If
+#     you don't need it, use the same network for SSHNW and CLUSTERNW
+#   . When created, SSHNW provides NAT'd access to external world
+CLUSTERNW=ratester
+SSHNW=ratesterssh
+
+# Optional SSH public key to install on sll created VM
+ADDITIONALSSHKEY= #$HOME/.ssh/id_rsa.pub
+
+# Optional packages to install on all created VM
+ADDITIONALPKGS= #emacs-nox,vim
+
+# ---- Obscure config
+
+VMRAM=1024
+VMCPU=1
+VMTMPPATH=$PWD/tmp
+VMSTORAGEPATH=$PWD/vm
+VMBASEIMG=$VMTMPPATH/ratmp-base.qcow2
+SSHMACPREFIX=52:54:00:42:42:0
+CLUSTERMACPREFIX=52:54:00:42:42:f
+QEMUURI=qemu:///system
+CMDTIMEOUT=300
+LOGINKEYNAME=login-key
+FENCEKEYNAME=fence-key
+VFLAGS="--selinux-relabel"
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+usage()
+{
+    cat <<EOF
+Create and set up KVM-based virtual machines for ra-tester
+Usage: $(basename $0) --img QCOW2_IMAGE_PATH --name VM_PREFIX_NAME [options ...]
+
+Options:
+   --img QCOW2_IMAGE_PATH       QCOW2 cloud image to be used as a base for creating VMs
+   --name VM_PREFIX_NAME        Name prefix for the VMs to be created (default: ratester)
+   --cluster-nw NW_NAME         Libvirt network for pacemaker and resources (no DHCP)
+   --ssh-nw NW_NAME             Secondary network, for debugging purpose
+   --opt-ssh-key SSH_KEY        Optional public key to inject into created VMs
+   --opt-pkgs PKG1,PKG2,...     Additional packages to install on created VMs
+
+Exemple:
+   $(basename $0) --img ./CentOS-7-x86_64-GenericCloud.qcow2 --name ratester
+EOF
+}
+
+
+cleanup_tmp_files()
+{
+    rm -f ${VMTMPPATH}/ratmp-*
+}
+
+on_error()
+{
+    echo "ERROR: failure occurred in $(basename $0):$1. Aborting" >&2
+    cleanup_tmp_files
+}
+
+define_networks()
+{
+    trap 'on_error $LINENO' ERR
+    
+    if ! virsh -c ${QEMUURI} net-list | grep -q "${CLUSTERNW}\\s"; then
+        echo "Creating cluster network \"$CLUSTERNW\" (no dhcp)"
+        CLUSTERNW=$CLUSTERNW envsubst <templates/cluster-net.xml.in >${VMTMPPATH}/ratmp-cluster-net.xml
+        virsh -c ${QEMUURI} net-define ${VMTMPPATH}/ratmp-cluster-net.xml
+        virsh -c ${QEMUURI} net-start ${CLUSTERNW}
+    fi
+    if ! virsh -c ${QEMUURI} net-list | grep -q "${SSHNW}\\s"; then
+        echo "Creating cluster network \"$SSHNW\" (dhcp, external access)"
+        SSHNW=$SSHNW envsubst <templates/ssh-net.xml.in >${VMTMPPATH}/ratmp-ssh-net.xml
+        virsh -c ${QEMUURI} net-define ${VMTMPPATH}/ratmp-ssh-net.xml
+        virsh -c ${QEMUURI} net-start ${SSHNW}
+    fi
+}
+
+prepare_base_image()
+{
+    trap 'on_error $LINENO' ERR
+
+    local gw=$(virsh -c ${QEMUURI} net-dumpxml $CLUSTERNW | sed -ne "s/.*address='\(.*\)' .*/\1/p")
+    local staticip_prefix=$(echo $gw | sed -e "s/\(.*\)\..*/\1./")
+
+    echo "Creating temporary base image base on ${IMG}"
+    cp ${IMG} ${VMBASEIMG}
+    
+    echo "Preparing temporary base image"
+    # startup and access
+    virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+        --run-command "for i in 1 2 3; do echo \"$staticip_prefix\$((10+\$i)) $VMPREFIXNAME\$i\" >> /etc/hosts; done" \
+        --timezone $(ls -l /etc/localtime | sed -s 's%.*/usr/share/zoneinfo/%%') \
+        --run-command "systemctl mask cloud-init.service cloud-init-local.service cloud-config.service cloud-final.service" \
+        --run-command "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config" \
+        --mkdir "/root/.ssh" \
+        --upload $LOGINKEYNAME:/root/.ssh/id_rsa \
+        --upload $LOGINKEYNAME.pub:/root/.ssh/id_rsa.pub \
+        --run-command "cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys" \
+        --upload $FENCEKEYNAME:/root/.ssh/$FENCEKEYNAME \
+        --upload $FENCEKEYNAME.pub:/root/.ssh/$FENCEKEYNAME.pub
+
+    # pacemaker
+    virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+        --install pacemaker,pacemaker-cts,pacemaker-remote,pcs,resource-agents,fence-virtd,fence-agents-virsh \
+        --password hacluster:password:ratester \
+        --run-command "systemctl enable pcsd.service pacemaker.service"
+
+    # galera, garbd
+    virt-customize ${VFLAGS} -a ${VMBASEIMG} --install galera,mariadb-galera-server
+
+    # SELinux settings
+    virt-customize ${VFLAGS} -m 1024 -a ${VMBASEIMG} --install openstack-selinux
+    
+    # dependencies for RA
+    virt-customize ${VFLAGS} -a ${VMBASEIMG} --install screen,dig,gdb
+
+    # convenience packages
+    if [ ! -z "$ADDITIONALPKGS" ]; then
+        virt-customize ${VFLAGS} -a ${VMBASEIMG} --install $ADDITIONALPKGS
+    fi
+
+    # convenience ssh key
+    if [ -f "$ADDITIONALSSHKEY" ]; then
+        virt-customize ${VFLAGS} -a ${VMBASEIMG} --ssh-inject root:file:$ADDITIONALSSHKEY
+    fi
+}
+
+get_node_ip()
+{
+    trap 'on_error $LINENO' ERR
+
+    local nodenum=$1
+    echo $(virsh -c ${QEMUURI} net-dhcp-leases $SSHNW | awk "/"${SSHMACPREFIX}$nodenum"/ {print \$5}" | sed 's%/.*%%')
+}
+
+setup_static_ip()
+{
+    trap 'on_error $LINENO' ERR
+
+    local nodenum=$1
+    local nodeip=$(get_node_ip $nodenum)
+    
+    local gw=$(virsh -c ${QEMUURI} net-dumpxml $CLUSTERNW | sed -ne "s/.*address='\(.*\)' .*/\1/p")
+    local netmask=$(virsh -c ${QEMUURI} net-dumpxml $CLUSTERNW | sed -ne "s/.*netmask='\(.*\)'>.*/\1/p")
+    local staticip=$(echo $gw | sed -e "s/\(.*\)\..*/\1."$((10+$nodenum))"/")
+
+    echo "Setting up cluster network's static IP for domain ${VMPREFIXNAME}${nodenum}"
+    CLUSTERMACPREFIX=${CLUSTERMACPREFIX} \
+    staticip=$staticip \
+    netmask=$netmask \
+    nodenum=$nodenum \
+    envsubst <templates/ifcfg-eth1.in >${VMTMPPATH}/ratmp-ifcfg-eth1-$nodenum
+
+    # the node may reboot when first started, so loop here
+    # until the scp is successful
+    timeout $CMDTIMEOUT sh -c "while ! scp -q -i login-key $SSH_OPTS ${VMTMPPATH}/ratmp-ifcfg-eth1-${nodenum} root@$nodeip:/etc/sysconfig/network-scripts/ifcfg-eth1 2>/dev/null; do sleep 2; done"
+    if [ $? -eq 0 ]; then
+        ssh -i login-key $SSH_OPTS root@$nodeip "ifdown eth1; ifup eth1"
+    else
+        echo "ERROR: Failed to set up static IP for domain ${VMPREFIXNAME}${nodenum}" >&2
+        exit 1
+    fi
+}
+
+setup_node()
+{
+    trap 'on_error $LINENO' ERR
+
+    local nodenum=$1
+
+    echo "Creating image for ${VMPREFIXNAME}${nodenum}"
+    mkdir -p $VMSTORAGEPATH
+    IMGFULLPATH=$VMSTORAGEPATH/${VMPREFIXNAME}${nodenum}.qcow2
+    cp ${VMBASEIMG} ${IMGFULLPATH}
+    virt-customize ${VFLAGS} -a ${IMGFULLPATH} --hostname ${VMPREFIXNAME}${nodenum}
+    
+    echo "Creating ${VMPREFIXNAME}${nodenum} and waiting for its IP to be assigned by DHCP"
+    DOMNAME=${VMPREFIXNAME}${nodenum} \
+    VMRAM=${VMRAM} \
+    VMCPU=${VMCPU} \
+    IMGFULLPATH=${IMGFULLPATH} \
+    SSHNW=$SSHNW \
+    SSHMAC=${SSHMACPREFIX}${nodenum} \
+    CLUSTERNW=$CLUSTERNW \
+    CLUSTERMAC=${CLUSTERMACPREFIX}${nodenum} \
+    envsubst <templates/domain.xml.in >${VMTMPPATH}/ratmp-${VMPREFIXNAME}${nodenum}.xml
+    virsh -c ${QEMUURI} define ${VMTMPPATH}/ratmp-${VMPREFIXNAME}${nodenum}.xml
+    virsh -c ${QEMUURI} start ${VMPREFIXNAME}${nodenum}
+    timeout $CMDTIMEOUT sh -c "while ! (virsh -c ${QEMUURI} net-dhcp-leases $SSHNW | grep -q ${SSHMACPREFIX}$nodenum); do sleep 2; done"
+    
+    if [ $? -eq 0 ]; then
+        setup_static_ip ${nodenum}
+    else
+        echo "ERROR: Failed to start domain ${VMPREFIXNAME}${nodenum}" >&2
+        exit 1
+    fi
+}
+
+generate_ssh_keys()
+{
+    trap 'on_error $LINENO' ERR
+
+    if [ ! -f $LOGINKEYNAME ]; then
+        echo "Creating SSH keypair for logging in"
+        ssh-keygen -t rsa -f $LOGINKEYNAME -N "" -C 'ratester login key'
+    fi
+    if [ ! -f $FENCEKEYNAME ]; then
+        echo "Creating SSH keypair for node fencing"
+        ssh-keygen -t rsa -f $FENCEKEYNAME -N "" -C 'ratester fence key'
+        cat $FENCEKEYNAME >> $HOME/.ssh/authorized_keys
+    fi
+}
+
+init_cluster()
+{
+    trap 'on_error $LINENO' ERR
+
+    echo "Initializing pacemaker/corosync config"
+    local cluster_nodes=$(for i in 1 2 3; do echo ${VMPREFIXNAME}$i; done | xargs echo)
+    ssh -i login-key $SSH_OPTS root@$(get_node_ip 1) "pcs cluster auth ${cluster_nodes} -u hacluster -p ratester"
+    ssh -i login-key $SSH_OPTS root@$(get_node_ip 1) "pcs cluster setup --force --name ratester ${cluster_nodes}"
+    ssh -i login-key $SSH_OPTS root@$(get_node_ip 1) "pcs cluster start --all"
+}
+
+generate_ssh_config()
+{
+    trap 'on_error $LINENO' ERR
+
+    echo "Generating SSH config for logging in"
+    VMPREFIXNAME=${VMPREFIXNAME} \
+    LOGINKEYNAME=${PWD}/${LOGINKEYNAME} \
+    envsubst <templates/ssh_config.in >ssh_config_${VMPREFIXNAME}
+    for i in 1 2 3; do
+        local node=${VMPREFIXNAME}$i
+        local node_ip=$(get_node_ip $i)
+        echo -e "\nHost ${node}\n\tHostName ${node_ip}" >>ssh_config_${VMPREFIXNAME}
+    done
+}
+
+
+while [ "$1" != "" ]; do
+    case "$1" in
+        --img ) IMG="$2"; shift 2;;
+        --name ) VMPREFIXNAME="$2"; shift 2;;
+        --cluster-nw ) CLUSTERNW="$2"; SSHNW="$2"; shift 2;;
+        --ssh-nw ) SSHNW="$2"; shift 2;;
+        --opt-ssh-key ) ADDITIONALSSHKEY="$2"; shift 2;;
+        --opt-pkgs ) ADDITIONALPKGS="$2"; shift 2;;
+        -h|--help ) usage; exit 0;;
+        * ) echo "ERROR: unknown parameter \"$1\"" >&2
+            usage
+            exit 1;;
+    esac
+done
+
+if [ "$IMG" == "" ]; then
+    echo "ERROR: no qcow2 image provided to build VM. Use --img QCOW2_IMAGE_PATH" >&2
+    exit 1
+fi
+
+if ! virsh -c ${QEMUURI} list &>/dev/null; then
+    echo "ERROR: Cannot connect to hypervisor at ${QEMUURI}" >&2
+    echo "Check that user belongs to group 'kvm' or has proper sudo settings" >&2
+    exit 1
+fi
+
+set -e
+
+# Creation and provisioning
+# -------------------------
+test -d $VMTMPPATH || mkdir -p $VMTMPPATH
+test -d $VMSTORAGEPATH || mkdir -p $VMSTORAGEPATH
+
+# Generate ratester keys, keep if already present
+generate_ssh_keys
+
+# Create networks in libvirt, reuse if existing
+define_networks
+
+# Create the and customize the base image
+prepare_base_image
+
+# Create VMs from the base image and finish provisioning
+for i in 1 2 3; do setup_node $i; done
+
+# Setup a pacemaker cluster on the created VM
+init_cluster
+
+# Dump connection setting
+generate_ssh_config
+
+cleanup_tmp_files
+
+echo ""
+echo "Cluster bootstrapped. You may now log in with:"
+echo "   ssh -F ssh_config_${VMPREFIXNAME} ${VMPREFIXNAME}{x}"
+echo ""
+echo "Please add hostname mapping in /etc/hosts for ra-tester"
