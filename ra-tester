@@ -36,10 +36,13 @@ from cts.CM_ais import crm_mcp
 from cts.CTSaudits import AuditList, LogAudit
 from cts.CTSscenarios import Sequence
 from cts.logging   import LogFactory
+from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
 # TODO: dynamic test loading
 # from racts.ratest import ReuseCluster
-from racts.rascenario import SetupSTONITH
+from racts.rascenario import RATesterDefaultFencing
+from racts.raaudit import RATesterAuditList
+from racts.raremotewatch import *
 import ra.galera
 import ra.garbd
 
@@ -80,15 +83,33 @@ def build_scenario_list(env, ra_modules):
                     result[module][scenario].append(bound_component)
     return result
 
+def build_fencing_list(env, ra_modules):
+    result = {}
+    for module in ra_modules:
+        fencing_component = module.fencing(env)
+        if fencing_component.IsApplicable():
+            result[module] = fencing_component
+        else:
+            result[module] = None
+    return result
+
 def count_all_tests(scenarios, tests):
     modules = scenarios.keys()
     scenarios_per_module = [len(scenarios[m]) for m in modules]
     tests_per_module = [len(tests[m]) for m in modules]
     return sum([a*b for a,b in zip(scenarios_per_module, tests_per_module)])
 
+def prepare_cts():
+    # continue watching when one node goes away
+    monkey_patch_cts_log_watcher()
+    # prevent deadlock with SSH + control master
+    monkey_patch_cts_remote_commands()
 
 
 if __name__ == '__main__':
+    # TODO: get rid of those temporary hooks in CTS
+    prepare_cts()
+
     env = CtsLab(["--stonith","no"]+sys.argv[1:])
     cluster_manager = crm_mcp(env)
     log=LogFactory()
@@ -120,6 +141,7 @@ if __name__ == '__main__':
 
     # sort tests by scenario
     all_scenarios = build_scenario_list(env, all_ra_modules)
+    all_fencing = build_fencing_list(env, all_ra_modules)
     all_tests = build_test_list(cluster_manager, all_ra_modules, all_audits)
     selected = {}
     for m in all_ra_modules:
@@ -128,6 +150,7 @@ if __name__ == '__main__':
             selected[sclass.__name__] = {
                 "scenario": sclass,
                 "components": all_scenarios[m][sclass],
+                "fencing": all_fencing[m],
                 "tests": all_tests[m]
                 }
 
@@ -148,7 +171,8 @@ if __name__ == '__main__':
             if scenario in chosen:
                 selected_filtered[scenario] = {
                     "scenario": selected[scenario]["scenario"],
-                    "components": selected[scenario]["components"]
+                    "components": selected[scenario]["components"],
+                    "fencing": selected[scenario]["fencing"]
                     }
                 tests_filtered=[]
                 for t in selected[scenario]["tests"]:
@@ -171,15 +195,11 @@ if __name__ == '__main__':
             for c in scenario['components']:
                 c.verbose = True
 
-    if stonith:
-        setup_stonith = [SetupSTONITH(env, env.has_key("verbose"))]
-    else:
-        setup_stonith = []
-
     # Set the signal handler
     signal.signal(15, sig_handler)
     signal.signal(10, sig_handler)
 
+    verbose = env.has_key("verbose")
     for s in selected:
         desc=selected[s]
         num_tests = len(desc['tests'])
@@ -190,8 +210,16 @@ if __name__ == '__main__':
         log.log("Random Seed:            %s" % env["RandSeed"])
         log.log("Syslog variant:         %s" % env["syslogd"].strip())
         log.log("System log files:       %s" % env["LogFileName"])
-        if env.has_key("verbose"):
+        if verbose:
             log.log("verbose mode will log cluster actions")
+
+        if stonith:
+            if desc['fencing'] != None:
+                setup_stonith = [desc['fencing']]
+            else:
+                setup_stonith = [RATesterDefaultFencing(env, verbose)]
+        else:
+            setup_stonith = []
 
         scenario = desc['scenario'](cluster_manager,
                                     desc['components']+setup_stonith,

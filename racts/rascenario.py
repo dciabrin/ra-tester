@@ -29,7 +29,6 @@ Licensed under the GNU GPL.
 import sys, signal, time, os, re, string, subprocess, tempfile
 from stat import *
 from cts import CTS
-from cts.CTS import CtsLab
 from cts.CTStests import CTSTest
 from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
@@ -84,17 +83,19 @@ class RATesterScenarioComponent(ScenarioComponent):
         assert res == expected, "\"%s\" returned %d"%(command,res)
 
 
-
-class SetupSTONITH(RATesterScenarioComponent):
+class RATesterDefaultFencing(RATesterScenarioComponent):
     def IsApplicable(self):
         return self.Env.has_key("DoFencing")
 
     def setup_scenario(self, cluster_manager):
-        cluster_manager.log("Enabling STONITH in cluster")
-        self.rsh_check(self.Env["nodes"][0], "pcs stonith create stonith fence_virsh ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key action=reboot pcmk_host_list=%s"%\
-                       (os.environ["USERNAME"], ",".join(self.Env["nodes"])))
+        cluster_manager.log("Enabling fencing in cluster")
+        self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence fence_virsh ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key action=reboot"%os.environ["USERNAME"])
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=true")
 
     def teardown_scenario(self, cluster_manager):
+        # handy debug hook
+        if self.Env.has_key("keep_resources"): return
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=false")
-        self.rsh_check(self.Env["nodes"][0], "pcs stonith delete stonith")
+        self.rsh_check(self.Env["nodes"][0], "pcs stonith delete fence")
+
+default_fencing = RATesterDefaultFencing
