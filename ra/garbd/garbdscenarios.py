@@ -104,6 +104,8 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
         self.Env["nodes"]=self.Env["nodes"][:-1]
         self.rsh_check(self.Env["nodes"][0], "pcs cluster setup --force --name ratester %s %s" % \
                        (self.Env["nodes"][0],self.Env["nodes"][1]))
+        # note: setting up cluster disable pacemaker service. re-enable it
+        self.rsh_check(self.Env["nodes"][0], "systemctl enable pacemaker")
         self.rsh_check(self.Env["nodes"][0], "pcs cluster start --all")
 
         # TODO: better way to wait until cluster is started
@@ -139,7 +141,6 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
 
     def TearDown(self, cluster_manager):
         cluster_manager.log("Leaving Cluster running on all nodes")
-        return 1
 
 scenarios[GarbdRemote].append(GarbdRemoteNewCluster)
 

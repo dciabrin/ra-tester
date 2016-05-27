@@ -135,3 +135,12 @@ class ResourceAgentTest(CTSTest):
         #     self.bg[target]=True
         # self.rsh_check(target, "screen -S %s -X stuff '%s\r'"%(self.name,command) )
         self.rsh_check(target, "screen -S %s -d -m %s"%(self.name,command) )
+
+    def wait_until_restarted(self, node, timeout=60):
+        start=time.time()
+        alive = False
+        while not alive:
+            time.sleep(3)
+            assert time.time()-start < timeout, "Restart timeout exceeded"
+            res = self.rsh(node, "true")
+            if res == 0: alive = True

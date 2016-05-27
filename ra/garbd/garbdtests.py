@@ -76,6 +76,10 @@ class GarbdRemoteTest(ResourceAgentTest):
         self.rsh_check(node, "pcs cluster cib-push garbd.xml && sleep 2")
 
     def teardown_test(self, node):
+        # handy debug hook
+        if self.Env.has_key("keep_resources"):
+            return 1
+
         # delete garbd first
         self.rsh_check(node, "pcs resource delete garbd --wait")
 
@@ -208,10 +212,10 @@ class StopWhenDemotingLastGaleraNode(ClusterStart):
 tests.append(StopWhenDemotingLastGaleraNode)
 
 class ErrorIfDisconnectFromAllNodes(ClusterStart):
-    '''Ensure garbd is stopped before the last galera node gracefully
-    exits the galera cluster.
+    '''Ensure garbd monitor errors if it is disconnected from all galera
+    nodes.
 
-    This ensures that garbd will reconnect on next cluster bootstrap
+    This ensures that garbd won't go into split-brain when galera cluster reforms
     '''
     def __init__(self, cm):
         ClusterStart.__init__(self,cm)
@@ -272,3 +276,76 @@ class DontRestartBeforeGaleraIsRestarted(ErrorIfDisconnectFromAllNodes):
         assert not watch.unmatched, watch.unmatched
 
 tests.append(DontRestartBeforeGaleraIsRestarted)
+
+class FenceNodeAfterNetworkDisconnection(ClusterStart):
+    '''On cluster partition, ensure one galera node is fenced, the other
+    survives and garbd is not stopped.  After the fencing, the galera
+    cluster should survive with 2 component: one galera + one garbd.
+
+    This ensures that there is no interruption of service for galera
+    should half of the cluster gets fenced.
+    '''
+    def __init__(self, cm):
+        ClusterStart.__init__(self,cm)
+        self.name = "FenceNodeAfterNetworkDisconnection"
+
+    def is_applicable(self):
+        return self.Env.has_key("DoFencing") and self.Env["DoFencing"] != 0
+
+    def create_mysql_user(self, target):
+        self.rsh_check(target,"mysql -nNEe \"drop user 'ratester'@'localhost';\" &>/dev/null || true")
+        self.rsh_check(target,"mysql -nNEe \"create user 'ratester'@'localhost' identified by 'ratester';\"")
+
+    def test(self, target):
+        '''Trigger a node fence and ensure garbd is still running'''
+        # start cluster
+        ClusterStart.test(self,target)
+
+        self.create_mysql_user(target)
+
+        # prevent fenced node to restart at reboot. disable
+        # both node for fencing can kill any one of those
+        for node in self.Env["nodes"]:
+            self.rsh_check(node, "systemctl disable pacemaker")
+
+        # cause network disruption, node0 cannot receive message from
+        # node1 (will block both corosync and galera cluster)
+        reboot_pattern="notice:\s*Peer\s*(.*)\swas\s*terminated\s*.reboot..*:\s*OK"
+        watch = self.create_watch([reboot_pattern], self.Env["DeadTime"])
+        watch.setwatch()
+        self.rsh_check(self.Env["nodes"][0],"iptables -A INPUT -j DROP -s %s"% \
+                       self.Env["nodes"][1])
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+
+        # there should be 2 nodes left in the galera cluster
+        # assert that on the remaining node
+        fenced_node = re.search(reboot_pattern, watch.matched[0]).group(1)
+        surviving_node = [n for n in self.Env["nodes"] if n != fenced_node][0]
+        self.rsh_check(surviving_node, "test $(mysql -uratester -pratester -nNEe \"show status like '%wsrep_cluster_size';\" | tail -1) = 2")
+
+        self.wait_until_restarted(fenced_node)
+
+    def teardown_test(self, target):
+        # restart pacemaker on the fenced node
+        pattern="corosync\[.*\]:\s+\[QUORUM\]\sMembers\[%d\]:"%len(self.Env["nodes"])
+        watch = self.create_watch([pattern], self.Env["DeadTime"])
+        watch.setwatch()
+        for node in self.Env["nodes"]:
+            self.rsh_check(node, "systemctl enable pacemaker")
+            self.rsh_check(node, "systemctl start pacemaker")
+        watch.lookforall()
+        # TODO: remove ugly delay
+        time.sleep(4)
+        self.rsh_check(target, "pcs resource disable galera")
+        ClusterStart.teardown_test(self, target)
+
+    def errorstoignore(self):
+        return [
+            # galera on fenced node will stop
+            r"ERROR:\s*MySQL is not running",
+            # stonith will complain on the fenced node
+            r"stonith-ng\[.*\]:\s+error:\sNo\s(modify|create)\smatch\sfor\s/cib/status/node_state"
+        ]
+
+tests.append(FenceNodeAfterNetworkDisconnection)
