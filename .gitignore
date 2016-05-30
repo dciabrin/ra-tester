@@ -2,6 +2,19 @@
 *.py[cod]
 .python-version
 
+# vm build
+tmp
+vm
+
+# non-regression logs
+log*
+*.txt
+
+# generated settings
+fence-key*
+login-key*
+ssh_config_*
+
 # editor
 *~
 \#*#
