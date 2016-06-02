@@ -242,9 +242,7 @@ class ErrorIfDisconnectFromAllNodes(ClusterStart):
         ClusterStart.teardown_test(self, target)
 
     def errorstoignore(self):
-        return [
-            # currently, ERROR is logged before mysqld is started...
-            r"ERROR: MySQL is not running",
+        return ClusterStart.errorstoignore(self)+[
             # expected after we force-killed the galera servers
             r"ERROR: MySQL not running: removing old PID file",
             # garbd will complain that it lost connection w/ galera cluster
@@ -341,9 +339,7 @@ class FenceNodeAfterNetworkDisconnection(ClusterStart):
         ClusterStart.teardown_test(self, target)
 
     def errorstoignore(self):
-        return [
-            # galera on fenced node will stop
-            r"ERROR:\s*MySQL is not running",
+        return ClusterStart.errorstoignore(self)+[
             # stonith will complain on the fenced node
             r"stonith-ng\[.*\]:\s+error:\sNo\s(modify|create)\smatch\sfor\s/cib/status/node_state"
         ]
