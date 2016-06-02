@@ -56,24 +56,30 @@ class GarbdRemoteTest(ResourceAgentTest):
     def setup_test(self, node):
         '''Setup the given test'''
         # create galera and garbd resources, without starting them yet
-
+        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE\s.*origin=notify_crmd"]
+        for n in self.Env["nodes"]:
+            patterns += [r"%s\sattrd.*:\s*notice:\sUpdating\sall\sattributes\safter\scib_refresh_notify\sevent"%n]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
         self.rsh_check(node, "pcs cluster cib galera.xml")
         self.rsh_check(node, "pcs -f galera.xml resource create galera galera enable_creation=true wsrep_cluster_address='gcomm://%s' meta master-max=2 ordered=true --master --disabled"% \
                        ",".join(self.Env["nodes"]))
         self.rsh_check(node, "pcs -f galera.xml constraint location galera-master rule resource-discovery=exclusive score=0 osprole eq controller")
-        # TODO: clean wait for cib push completion
-        self.rsh_check(node, "pcs cluster cib-push galera.xml && sleep 2")
+        self.rsh_check(node, "pcs cluster cib-push galera.xml")
         # Note: starting in target-role:Stopped first triggers a demote, then a stop
         # Note: adding a resource forces a first probe (INFO: MySQL is not running)
+        watch.lookforall()
 
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
         self.rsh_check(node, "pcs cluster cib garbd.xml")
         self.rsh_check(node,
                        "pcs -f garbd.xml resource create garbd garbd wsrep_cluster_name='ratester' wsrep_cluster_address='gcomm://%s' options='pc.announce_timeout=PT30s' op start timeout=30"% \
                        ",".join([x+":4567" for x in self.Env["nodes"]]))
         self.rsh_check(node, "pcs -f garbd.xml constraint location garbd rule resource-discovery=exclusive score=0 osprole eq arbitrator")
         self.rsh_check(node, "pcs -f garbd.xml constraint order start galera-master then start garbd")
-        # TODO: clean wait for cib push completion
-        self.rsh_check(node, "pcs cluster cib-push garbd.xml && sleep 2")
+        self.rsh_check(node, "pcs cluster cib-push garbd.xml")
+        watch.lookforall()
 
     def teardown_test(self, node):
         # handy debug hook
@@ -127,20 +133,8 @@ class ClusterStart(GarbdRemoteTest):
         # clean errors and force probe current state
         # this is my way of ensuring pacemaker will "promote" nodes
         # rather than just "monitoring" and finding "Master" state
-        patterns = [r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("galera", "not running", n) \
-                    for n in self.Env["nodes"]]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
-        self.rsh_check(target, "pcs resource cleanup galera")
-        watch.lookforall()
-        assert not watch.unmatched, watch.unmatched
-
-        patterns = [r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("garbd", "not running", "arb")]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
+        self.rsh_check(target, "pcs resource cleanup galera-master")
         self.rsh_check(target, "pcs resource cleanup garbd")
-        watch.lookforall()
-        assert not watch.unmatched, watch.unmatched
 
         # need to enable galera-master because of how we created the resource
         patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", n) \
