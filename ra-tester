@@ -160,11 +160,18 @@ if __name__ == '__main__':
         chosen={}
         for name in env["tests"]:
             if ':' not in name:
-                log.log("Skipping invalid test name: %s"%name)
-                continue
+                name = name+':'
             scenario, test = name.split(":",1)
             oldtests = chosen.get(scenario,[])
-            chosen[scenario] = oldtests+[test]
+            if test != '':
+                # specific test from a scenario
+                chosen[scenario] = oldtests+[test]
+            else:
+                # all tests from the scenario
+                alltests = selected.get(scenario,{}).get("tests",[])
+                alltestnames = [t.name for t in alltests]
+                if alltestnames:
+                    chosen[scenario] = oldtests+alltestnames
 
         selected_filtered = {}
         for scenario in selected:
