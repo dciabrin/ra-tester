@@ -239,9 +239,10 @@ class NodeForceStartJoining(ClusterStart):
 
         # we want to track (1) and (2).
         # TODO: double check (1) and (2) with attribute "sync-needed"
-        patterns = [r"INFO: Node <%s> is joining the cluster"%(node,),
-                    r"INFO: local node synced with the cluster",
-                    self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", node)]
+        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", node)]
+        # newer version of the RA
+        # patterns = [r"INFO: Node <%s> is joining the cluster"%(node,),
+        #             r"INFO: local node synced with the cluster"]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         # TODO potential race, we should stop the node here
@@ -325,9 +326,11 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
         time.sleep(3)
 
         patterns = [r"local node.*was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover",
-                    r"Node <%s> is joining the cluster"%(target,),
-                    r"INFO: local node synced with the cluster",
                     self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", target)]
+        # newer version of the RA
+        # patterns += [r"Node <%s> is joining the cluster"%(target,),
+        #              r"INFO: local node synced with the cluster"]
+
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         triggernode=[x for x in self.Env["nodes"] if x != target][0]
@@ -567,6 +570,10 @@ class NodeLongRunningSST(ClusterStart):
         GaleraTest.__init__(self,cm)
         self.name = "NodeLongRunningSST"
 
+    def is_applicable(self):
+        return self.rsh(self.Env["nodes"][0],
+                        "grep sync-needed /usr/lib/ocf/resource.d/heartbeat/galera") == 0
+
     def create_big_file(self, node):
         self.rsh_check(node, "mkdir -p /var/lib/mysql/big_file && dd if=/dev/urandom bs=1024 count=200000 of=/var/lib/mysql/big_file/for_sst && chown -R mysql. /var/lib/mysql/big_file")
 
@@ -630,6 +637,10 @@ class ClusterStartWith2LongRunningSST(NodeLongRunningSST):
     def __init__(self, cm):
         GaleraTest.__init__(self,cm)
         self.name = "ClusterStartWith2LongRunningSST"
+
+    def is_applicable(self):
+        return self.rsh(self.Env["nodes"][0],
+                        "grep sync-needed /usr/lib/ocf/resource.d/heartbeat/galera") == 0
 
     def setup_test(self, target):
         # tmp hack: make last node the target, it can be
