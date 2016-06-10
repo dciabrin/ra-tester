@@ -172,17 +172,14 @@ class GarbdRemoteKeepCluster(RATesterScenarioComponent):
         for node in self.Env["nodes"]:
             self.rsh_check(node, "pcs property set --node %s osprole=controller"%node)
 
-        # attempt at cleaning up and remove galera if it exists
-        # try to avoid cluster error when we stop the resource because
-        # we don't know in which state it was left.
-        # => tell pacemaker that we're going to stop galera, cleanup
-        # any error that could prevent the stop, and let pacemaker
-        # know the current state of the resource before processing
-        # Note: if you clean and delete before pacemaker had a
+        # Stop and remove galera if it exists
+        # Note1: in order to avoid error when stopping the resource while
+        # in unknown state, we first reprobe the resource state.
+        # Note2: if you clean and delete before pacemaker had a
         # chance to re-probe state, it will consider resource is stopped
         # and will happily delete the resource from the cib even if
         # galera is still running!
-        # Note2: after a cleanup, pacemaker may log a warning log
+        # Note3: after a cleanup, pacemaker may log a warning log
         # if it finds the resource is still running. This does not
         # count as an error for the CTS test
         rc = self.rsh(target, "pcs resource unmanage galera")

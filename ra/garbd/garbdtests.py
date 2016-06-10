@@ -92,18 +92,22 @@ class GarbdRemoteTest(ResourceAgentTest):
         # delete galera
         # try to avoid cluster error when we stop the resource because
         # we don't know in which state it was left.
-        # => tell pacemaker that we're going to stop galera, cleanup
-        # any error that could prevent the stop, and let pacemaker
-        # know the current state of the resource before processing
-        # Note: if you clean and delete before pacemaker had a
+        # => cleanup any error that could prevent the stop, and let
+        # pacemaker know the current state of the resource before
+        # triggering a delete
+        # Note1: if you clean and delete before pacemaker had a
         # chance to re-probe state, it will consider resource is stopped
         # and will happily delete the resource from the cib even if
         # galera is still running!
         # Note2: after a cleanup, pacemaker may log a warning log
         # if it finds the resource is still running. This does not
         # count as an error for the CTS test
+        # Note3: not sure why, but cleanup can either trigger a probe
+        # from crmd, or nothing if pengine determines it doesn't need
+        # to do anything. catch those two cases in the patterns
         self.rsh_check(node, "pcs resource unmanage galera")
-        patterns = [r"crmd.*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
+        patterns = ["("+r"crmd.*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n)+ \
+                    "|"+r"notice:\sForcing\sunmanaged\smaster\s.*\sto\sremain\spromoted\son\s%s"%n+")"
                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
@@ -318,19 +322,14 @@ class FenceNodeAfterNetworkDisconnection(ClusterStart):
 
         self.wait_until_restarted(fenced_node)
 
-    def teardown_test(self, target):
-        # restart pacemaker on the fenced node
-        pattern="corosync\[.*\]:\s+\[QUORUM\]\sMembers\[%d\]:"%len(self.Env["nodes"])
-        watch = self.create_watch([pattern], self.Env["DeadTime"])
+        # restart pacemaker on the fenced node, and wait for galera to
+        # come up on that node
+        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", fenced_node)]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
-        for node in self.Env["nodes"]:
-            self.rsh_check(node, "systemctl enable pacemaker")
-            self.rsh_check(node, "systemctl start pacemaker")
+        self.rsh_check(fenced_node, "systemctl enable pacemaker")
+        self.rsh_check(fenced_node, "systemctl start pacemaker")
         watch.lookforall()
-        # TODO: remove ugly delay
-        time.sleep(4)
-        self.rsh_check(target, "pcs resource disable galera")
-        ClusterStart.teardown_test(self, target)
 
     def errorstoignore(self):
         return ClusterStart.errorstoignore(self)+[
