@@ -87,6 +87,15 @@ class GaleraTest(ResourceAgentTest):
             r"rsyncd.*:\s*rsync error: received SIGINT, SIGTERM, or SIGHUP"
         ]
 
+    def errors_after_forced_stop(self):
+        # after the node has been force-stopped, monitor op will fail and log
+        return [
+            r"ERROR: Unable to retrieve wsrep_cluster_status, verify check_user",
+            r"ERROR: local node <.*> is started, but not in primary mode. Unknown state.",
+            r"ERROR: MySQL not running: removing old PID file",
+            r"notice:\s.*-galera_monitor_.*:.*\s\[\sERROR\s.*\s\(HY000\): Lost\sconnection\sto\sMySQL\sserver"
+        ]
+
 
 class ClusterStart(GaleraTest):
     '''Start the galera cluster on all the nodes'''
@@ -239,6 +248,10 @@ class NodeForceStartJoining(ClusterStart):
         # once a node is running, boot status should be cleared
         self.crm_attr_check(node, "no-grastate", expected = 6)
 
+    def errorstoignore(self):
+        return GaleraTest.errorstoignore(self) + \
+               GaleraTest.errors_after_forced_stop(self)
+
 tests.append(NodeForceStartJoining)
 
 
@@ -314,9 +327,8 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
         assert not watch.unmatched, watch.unmatched
 
     def errorstoignore(self):
-        return GaleraTest.errorstoignore(self) + [
-            r"ERROR: MySQL not running: removing old PID file",
-        ]
+        return GaleraTest.errorstoignore(self) + \
+               GaleraTest.errors_after_forced_stop(self)
 
 tests.append(NodeRecoverWhileClusterIsRunning)
 
@@ -440,9 +452,8 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
         self.crm_attr_check(target, "galera-no-grastate", expected = 6)
 
     def errorstoignore(self):
-        return GaleraTest.errorstoignore(self) + [
-            r"ERROR: MySQL not running: removing old PID file",
-        ]
+        return GaleraTest.errorstoignore(self) + \
+               GaleraTest.errors_after_forced_stop(self)
 
 tests.append(NodeRecoverWhileStartingCluster)
 
@@ -486,10 +497,8 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
             self.crm_attr_check(node, "galera-no-grastate", expected = 6)
 
     def errorstoignore(self):
-        return GaleraTest.errorstoignore(self) + [
-            r"ERROR: MySQL not running: removing old PID file",
-            r"local node <.*> is started, but not in primary mode. Unknown state."
-        ]
+        return GaleraTest.errorstoignore(self) + \
+               GaleraTest.errors_after_forced_stop(self)
 
 tests.append(ClusterRestartAfter2RecoveredNodes)
 
@@ -532,9 +541,8 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
             self.crm_attr_check(node, "galera-no-grastate", expected = 6)
 
     def errorstoignore(self):
-        return GaleraTest.errorstoignore(self) + [
-            r"ERROR: MySQL not running: removing old PID file"
-        ]
+        return GaleraTest.errorstoignore(self) + \
+               GaleraTest.errors_after_forced_stop(self)
 
 
 tests.append(ClusterRestartAfterAllNodesRecovered)
