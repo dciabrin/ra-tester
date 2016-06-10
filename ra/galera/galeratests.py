@@ -58,11 +58,17 @@ class GaleraTest(ResourceAgentTest):
     def setup_test(self, node):
         '''Setup the given test'''
         # create a galera resource, without starting it yet
+        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE\s.*origin=notify_crmd"]
+        patterns += [r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("galera", "not running", n) \
+                    for n in self.Env["nodes"]]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
         self.rsh_check(node,
                        "pcs resource create galera galera enable_creation=true wsrep_cluster_address='gcomm://%s' meta master-max=3 ordered=true --master --disabled"% \
                        ",".join(self.Env["nodes"]))
         # Note: starting in target-role:Stopped first triggers a demote, then a stop
         # Note: adding a resource forces a first probe (INFO: MySQL is not running)
+        watch.lookforall()
 
     def teardown_test(self, node):
         # give back control to pacemaker in case the test disabled it
