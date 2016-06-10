@@ -182,13 +182,18 @@ class NodeForceStartBootstrap(GaleraTest):
         self.rsh_check(target, "pcs resource enable galera-master")
 
         # force status of target node to "bootstrap" and promote it
+        # note: in the current RA, once a node is promoted, it forces
+        # other nodes to go master. Since the resource is unmanaged,
+        # that sets phantom attributes "master-galera:0" in the CIB
         self.crm_attr_set(target, "galera-bootstrap", "true")
         self.crm_attr_set(target, "master-galera", "100")
         self.rsh_check(target, "crm_resource --force-promote -r galera")
 
-        # instruct pacemaker to redetect the state of the galera resource
-        # note: it seems patterns "galera_monitor_0:" are only logged
-        # for probe actions, not on regular monitor timers...
+        # remove unwanted "master-galera:0" attributes
+        for n in self.Env["nodes"]:
+            self.rsh_check(n, "crm_attribute -N %s -l reboot --name master-galera:0 -D"%n)
+
+        # instruct pacemaker to re-probe the state of the galera resource
         pattern = r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("galera", "master", target)
         watch = self.create_watch([pattern], self.Env["DeadTime"])
 
@@ -271,6 +276,10 @@ class NodeCheckDemoteCleanUp(GaleraTest):
         self.crm_attr_set(node, "galera-bootstrap", "true")
         self.crm_attr_set(node, "master-galera", "100")
         self.rsh_check(node, "crm_resource --force-promote -r galera")
+
+        # remove unwanted "master-galera:0" attributes
+        for n in self.Env["nodes"]:
+            self.rsh_check(n, "crm_attribute -N %s -l reboot --name master-galera:0 -D"%n)
 
         # ensure things are cleaned up after a demote
         self.rsh_check(node, "crm_resource --force-demote -r galera")
