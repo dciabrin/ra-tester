@@ -38,19 +38,26 @@ from cts.CTSscenarios import Sequence
 from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
-# TODO: dynamic test loading
-# from racts.ratest import ReuseCluster
 from racts.rascenario import RATesterDefaultFencing
 from racts.raaudit import RATesterAuditList
 from racts.raremotewatch import *
-import ra.galera
-import ra.garbd
 
 
 # These are globals so they can be used by the signal handler.
 cluster_manager = None
 scenario = None
 
+def load_ra_modules():
+    modules = []
+    for d in os.listdir('ra'):
+        if os.path.isfile(os.path.join('ra',d,'__init__.py')):
+            try:
+                m = __import__('ra.'+d, fromlist=['ra'])
+                # TODO sanity checks
+                modules.append(m)
+            except ImportError:
+                pass
+    return modules
 
 def sig_handler(signum, frame) :
     LogFactory().log("Interrupted by signal %d"%signum)
@@ -86,9 +93,12 @@ def build_scenario_list(env, ra_modules):
 def build_fencing_list(env, ra_modules):
     result = {}
     for module in ra_modules:
-        fencing_component = module.fencing(env)
-        if fencing_component.IsApplicable():
-            result[module] = fencing_component
+        if 'fencing' in dir(module):
+            fencing_component = module.fencing(env)
+            if fencing_component.IsApplicable():
+                result[module] = fencing_component
+            else:
+                result[module] = None
         else:
             result[module] = None
     return result
@@ -115,8 +125,7 @@ if __name__ == '__main__':
     log=LogFactory()
     log.add_stderr()
 
-    # TODO: dynamic test loading
-    all_ra_modules = [ra.garbd]
+    all_ra_modules = load_ra_modules()
     all_audits = AuditList(cluster_manager)
 
     stonith = False
@@ -154,7 +163,7 @@ if __name__ == '__main__':
                 "tests": all_tests[m]
                 }
 
-    # --choose scenario1:test1,scenario2:test4,scenario1:test2
+    # --choose scenario1:test1,scenario2:test4,scenario3,scenario1:test2
     if len(env["tests"]) != 0:
         match = None
         chosen={}

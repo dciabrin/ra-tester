@@ -44,53 +44,6 @@ from cts.environment import EnvFactory
 from racts.ratest import ResourceAgentTest, ReuseCluster
 
 tests = []
-scenarios = []
-
-class GaleraScenario(ReuseCluster):
-    def __init__(self, environment):
-        ReuseCluster.__init__(self, environment)
-        self.rsh = RemoteFactory().getInstance()
-        self.log = LogFactory()
-
-    def IsApplicable(self):
-        return 1
-
-    def SetUp(self, cluster_manager):
-        # pre-requisites
-        prerequisite = ["/usr/bin/gdb", "/usr/bin/screen", "/usr/bin/dig"]
-        missing_reqs = False
-        for req in prerequisite:
-            if not self.rsh.exists_on_all(req, self.Env["nodes"]):
-                self.log.log("error: %s could not be found on remote nodes."
-                             "Please install the necessary package to run the tests"%  req)
-                missing_reqs = True
-        if missing_reqs:
-            return 0
-
-        # galera-specific data
-        test_scripts = ["kill-during-txn.gdb", "slow_down_sst.sh"]
-        for node in self.Env["nodes"]:
-            for script in test_scripts:
-                src = os.path.join(os.path.dirname(os.path.abspath(__file__)), script)
-                rc = self.rsh.cp(src, "root@%s:/tmp/%s" % (node, script))
-                if rc != 0:
-                    self.log.log("error: could not copy test data \"%s\" on remote node \"%s\"" % \
-                                 (src, node))
-                    return 0
-
-        # clean up any traffic control on target network interface
-        for node in self.Env["nodes"]:
-            res=self.rsh(node, "/tmp/slow_down_sst.sh -n %s off || true"%node)
-            if res != 0:
-                return 0
-
-        return 1
-
-    def TearDown(self, cluster_manager):
-        return 1
-
-scenarios.append(GaleraScenario)
-
 
 
 class GaleraTest(ResourceAgentTest):
