@@ -1,0 +1,18 @@
+#cloud-config
+instance-id: ${DOMNAME}
+network-interfaces: |
+  auto eth0
+  iface eth0 inet dhcp
+  auto ens2
+  iface ens2 inet dhcp
+  auto eth1
+  iface eth1 inet static
+  address ${CLUSTERIP}
+  network 160.0.0.0
+  netmask 255.0.0.0
+  auto ens3
+  iface ens3 inet static
+  address ${CLUSTERIP}
+  network 160.0.0.0
+  netmask 255.0.0.0
+local-hostname: ${DOMNAME}

@@ -20,6 +20,11 @@
       <source file='${IMGFULLPATH}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='${ISOFULLPATH}'/>
+      <target dev='vdb' bus='virtio'/>
+    </disk>
     <interface type='network'>
       <mac address='${SSHMAC}'/>
       <source network='${SSHNW}'/>
