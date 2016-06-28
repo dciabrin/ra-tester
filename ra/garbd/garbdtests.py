@@ -58,7 +58,7 @@ class GarbdRemoteTest(ResourceAgentTest):
         # create galera and garbd resources, without starting them yet
         patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE\s.*origin=notify_crmd"]
         for n in self.Env["nodes"]:
-            patterns += [r"%s\sattrd.*:\s*notice:\sUpdating\sall\sattributes\safter\scib_refresh_notify\sevent"%n]
+            patterns += [r"%s\S*\sattrd.*:\s*notice:\sUpdating\sall\sattributes\safter\scib_refresh_notify\sevent"%n]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(node, "pcs cluster cib galera.xml")
@@ -124,6 +124,9 @@ class GarbdRemoteTest(ResourceAgentTest):
             r"ERROR:\s*MySQL is not running",
             # every SST finishes by killing rsynd on the joiner side...
             r"rsyncd.*:\s*rsync error: received SIGINT, SIGTERM, or SIGHUP"
+            # for the time being, silent stonith complaints
+            # TODO: narrow the scope of this regexp
+            r"stonith-ng\[.*\]:\s+error:\sNo\s(modify|create)\smatch\sfor\s/cib/status/node_state"
         ]
 
 class ClusterStart(GarbdRemoteTest):
@@ -331,10 +334,5 @@ class FenceNodeAfterNetworkDisconnection(ClusterStart):
         self.rsh_check(fenced_node, "systemctl start pacemaker")
         watch.lookforall()
 
-    def errorstoignore(self):
-        return ClusterStart.errorstoignore(self)+[
-            # stonith will complain on the fenced node
-            r"stonith-ng\[.*\]:\s+error:\sNo\s(modify|create)\smatch\sfor\s/cib/status/node_state"
-        ]
 
 tests.append(FenceNodeAfterNetworkDisconnection)
