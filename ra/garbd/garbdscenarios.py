@@ -118,7 +118,7 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
         self.rsh_check(self.Env["nodes"][0], "pcs property set --node arb osprole=arbitrator")
 
         # there's no selinux context for garbd currently
-        res=self.rsh_check(self.Env["arb"], "setenforce 0")
+        res=self.rsh_check(self.Env["arb"], "test -x /usr/sbin/setenforce && setenforce 0 || true")
 
 
     def TearDown(self, cluster_manager):
