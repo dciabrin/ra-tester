@@ -78,6 +78,14 @@ class GaleraNewCluster(RATesterScenarioComponent):
                     "failed to copy data \"%s\" on remote node \"%s\"" % \
                     (src, node)
 
+        self.log("Copy test-specific galera config")
+        with tempfile.NamedTemporaryFile() as tmp:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
+            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"])))
+            tmp.flush()
+            galera_config_files = [(tmp.name,"/etc/my.cnf.d/galera.cnf")]
+            self.copy_to_nodes(galera_config_files)
+
         # clean up any traffic control on target network interface
         for node in self.Env["nodes"]:
             self.rsh(node, "/tmp/slow_down_sst.sh -n %s off"%node)
