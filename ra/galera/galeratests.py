@@ -71,6 +71,10 @@ class GaleraTest(ResourceAgentTest):
         watch.lookforall()
 
     def teardown_test(self, node):
+        # handy debug hook
+        if self.Env.has_key("keep_resources"):
+            return 1
+
         # give back control to pacemaker in case the test disabled it
         self.rsh_check(node, "pcs resource manage galera")
 
