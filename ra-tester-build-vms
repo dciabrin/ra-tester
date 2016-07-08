@@ -146,13 +146,30 @@ define_networks()
         CLUSTERNWGW=$CLUSTERNWGW \
         envsubst <templates/cluster-net.xml.in >${VMTMPPATH}/ratmp-cluster-net.xml
         virsh -c ${QEMUURI} net-define ${VMTMPPATH}/ratmp-cluster-net.xml
+        virsh -c ${QEMUURI} net-autostart ${CLUSTERNW}
         virsh -c ${QEMUURI} net-start ${CLUSTERNW}
     fi
     if ! virsh -c ${QEMUURI} net-list | grep -q "${SSHNW}\\s"; then
         echo "Creating cluster network \"$SSHNW\" (dhcp, external access)"
         SSHNW=$SSHNW envsubst <templates/ssh-net.xml.in >${VMTMPPATH}/ratmp-ssh-net.xml
         virsh -c ${QEMUURI} net-define ${VMTMPPATH}/ratmp-ssh-net.xml
+        virsh -c ${QEMUURI} net-autostart ${SSHNW}
         virsh -c ${QEMUURI} net-start ${SSHNW}
+    fi
+}
+
+define_pool()
+{
+    trap 'on_error $LINENO' ERR
+
+    if ! virsh -c ${QEMUURI} pool-list | grep -q ratester; then
+        echo "Creating storage pool for ra-tester VMs"
+        VMPOOLNAME=$VMPOOLNAME \
+        VMSTORAGEPATH=$VMSTORAGEPATH \
+        envsubst <templates/pool.xml.in >${VMTMPPATH}/ratmp-pool.xml
+        virsh -c ${QEMUURI} pool-define ${VMTMPPATH}/ratmp-pool.xml
+        virsh -c ${QEMUURI} pool-autostart ratester
+        virsh -c ${QEMUURI} pool-start ratester
     fi
 }
 
@@ -160,15 +177,19 @@ generate_fence_config_and_key()
 {
     trap 'on_error $LINENO' ERR
 
-    echo "Generating configuration for multicast-based fencing"
-    local iface=$(virsh -c ${QEMUURI} net-dumpxml $SSHNW | sed -ne "s/.*bridge.*name='\([^']*\)' .*/\1/p")
-    QEMUURI=$QEMUURI \
-    IFACE=$iface \
-    FENCEXVMKEYNAME=$FENCEXVMKEYNAME \
-    envsubst <templates/fence_virt.conf.in >fence_virt.conf
+    if [ ! -f fence_virt.conf ]; then
+        echo "Generating configuration for multicast-based fencing"
+        local iface=$(virsh -c ${QEMUURI} net-dumpxml $SSHNW | sed -ne "s/.*bridge.*name='\([^']*\)' .*/\1/p")
+        QEMUURI=$QEMUURI \
+        IFACE=$iface \
+        FENCEXVMKEYNAME=$FENCEXVMKEYNAME \
+        envsubst <templates/fence_virt.conf.in >fence_virt.conf
+    fi
 
-    echo "Generating authorization key for multicast-based fencing"
-    dd if=/dev/urandom of=ratester_fence_xvm.key bs=4096 count=1
+    if [ ! -f $FENCEXVMKEYNAME ]; then
+        echo "Generating authorization key for multicast-based fencing"
+        dd if=/dev/urandom of=$FENCEXVMKEYNAME bs=4096 count=1
+    fi
 }
 
 cluster_gw()
