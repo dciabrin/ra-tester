@@ -123,7 +123,7 @@ class GarbdRemoteTest(ResourceAgentTest):
             # currently, ERROR is logged before mysqld is started...
             r"ERROR:\s*MySQL is not running",
             # every SST finishes by killing rsynd on the joiner side...
-            r"rsyncd.*:\s*rsync error: received SIGINT, SIGTERM, or SIGHUP"
+            r"rsyncd.*:\s*rsync error: received SIGINT, SIGTERM, or SIGHUP",
             # for the time being, silent stonith complaints
             # TODO: narrow the scope of this regexp
             r"stonith-ng\[.*\]:\s+error:\sNo\s(modify|create)\smatch\sfor\s/cib/status/node_state"
