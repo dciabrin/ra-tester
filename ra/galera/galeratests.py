@@ -411,6 +411,11 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
         GaleraTest.__init__(self,cm)
         self.name = "NodeRecoverWhileStartingCluster"
 
+    def is_applicable(self):
+        # mariadb 10.1+ seems to be immune to pending XA
+        return self.rsh(self.Env["nodes"][0],
+                        "mysql --version | awk '{print $5}' | awk -F. '$1==5 && $2==5 {print 1}' | grep 1") == 0
+
     def test(self, target):
         # start cluster, prepare nodes to be killed
         ClusterStart.test(self, target)
@@ -476,6 +481,11 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
         GaleraTest.__init__(self,cm)
         self.name = "ClusterRestartAfter2RecoveredNodes"
 
+    def is_applicable(self):
+        # mariadb 10.1+ seems to be immune to pending XA
+       return self.rsh(self.Env["nodes"][0],
+                        "mysql --version | awk '{print $5}' | awk -F. '$1==5 && $2==5 {print 1}' | grep 1") == 0
+
     def test(self, target):
         to_break = [x for x in self.Env["nodes"] if x != target]
 
@@ -520,6 +530,11 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
     def __init__(self, cm):
         GaleraTest.__init__(self,cm)
         self.name = "ClusterRestartAfterAllNodesRecovered"
+
+    def is_applicable(self):
+        # mariadb 10.1+ seems to be immune to pending XA
+        return self.rsh(self.Env["nodes"][0],
+                        "mysql --version | awk '{print $5}' | awk -F. '$1==5 && $2==5 {print 1}' | grep 1") == 0
 
     def test(self, target):
         all_nodes = self.Env["nodes"]
