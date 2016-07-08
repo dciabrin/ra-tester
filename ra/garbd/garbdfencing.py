@@ -34,18 +34,15 @@ from cts.CTSscenarios import *
 from cts.CTSaudits import *
 from cts.CTSvars   import *
 
-from racts.rascenario import RATesterScenarioComponent
+from racts.rafencing import RATesterFencingComponent
 
-class Garbd2NodesDelayedFencing(RATesterScenarioComponent):
-    def IsApplicable(self):
-        return self.Env.has_key("DoFencing")
-
+class Garbd2NodesDelayedFencing(RATesterFencingComponent):
     def setup_scenario(self, cluster_manager):
         cluster_manager.log("Enabling fencing in cluster")
         delay=0
         for node in self.Env["nodes"]:
-            self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence_%s fence_virsh ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key action=reboot delay=%d pcmk_host_list=%s"%\
-                           (node, os.environ["USERNAME"], delay, node))
+            self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence_%s %s %s action=reboot delay=%d pcmk_host_list=%s"%\
+                           (node, self.Env["stonith-type"], self.Env["stonith-params"], delay, node))
             delay+=5
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=true")
 

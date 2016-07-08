@@ -289,7 +289,7 @@ class FenceNodeAfterNetworkDisconnection(ClusterStart):
         self.name = "FenceNodeAfterNetworkDisconnection"
 
     def is_applicable(self):
-        return self.Env.has_key("DoFencing") and self.Env["DoFencing"] != 0
+        return self.Env["stonith"] == True
 
     def create_mysql_user(self, target):
         self.rsh_check(target,"mysql -nNEe \"drop user 'ratester'@'localhost';\" &>/dev/null || true")

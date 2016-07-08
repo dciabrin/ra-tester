@@ -98,21 +98,3 @@ class RATesterScenarioComponent(ScenarioComponent):
         if self.verbose: self.log("> [%s] %s"%(target,command))
         res=self.rsh(target, command+" &>/dev/null")
         assert res == expected, "\"%s\" returned %d"%(command,res)
-
-
-class RATesterDefaultFencing(RATesterScenarioComponent):
-    def IsApplicable(self):
-        return self.Env.has_key("DoFencing")
-
-    def setup_scenario(self, cluster_manager):
-        cluster_manager.log("Enabling fencing in cluster")
-        self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence fence_virsh ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key action=reboot"%os.environ["USERNAME"])
-        self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=true")
-
-    def teardown_scenario(self, cluster_manager):
-        # handy debug hook
-        if self.Env.has_key("keep_resources"): return
-        self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=false")
-        self.rsh_check(self.Env["nodes"][0], "pcs stonith delete fence")
-
-default_fencing = RATesterDefaultFencing

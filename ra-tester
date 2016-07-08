@@ -38,7 +38,7 @@ from cts.CTSscenarios import Sequence
 from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
-from racts.rascenario import RATesterDefaultFencing
+from racts.rafencing import RATesterDefaultFencing
 from racts.raaudit import RATesterAuditList
 from racts.raremotewatch import *
 
@@ -128,10 +128,9 @@ if __name__ == '__main__':
     all_ra_modules = load_ra_modules()
     all_audits = AuditList(cluster_manager)
 
-    stonith = False
-    if env.has_key("DoFencing") and env["DoFencing"] != 0:
-        # TODO: make stonith settings configurable
-        stonith = True
+    env["stonith"]=False
+    if env["DoFencing"]==1 or (env.has_key("DoStonith") and env["DoStonith"]==1):
+        env["stonith"]=True
 
     for i in [x for x in all_audits if isinstance(x,LogAudit)]:
         i.kinds = [ "journal", "remote" ]
@@ -229,7 +228,7 @@ if __name__ == '__main__':
         if verbose:
             log.log("verbose mode will log cluster actions")
 
-        if stonith:
+        if env["stonith"]:
             if desc['fencing'] != None:
                 setup_stonith = [desc['fencing']]
             else:

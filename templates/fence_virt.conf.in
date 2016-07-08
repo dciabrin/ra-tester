@@ -1,0 +1,19 @@
+backends {
+	libvirt {
+		uri = "${QEMUURI}";
+	}
+}
+
+listeners {
+	multicast {
+		interface = "${IFACE}";
+		address = "225.0.0.12";
+		key_file = "/etc/cluster/${FENCEXVMKEYNAME}";
+	}
+}
+
+fence_virtd {
+        module_path = "/usr/lib64/fence-virt";
+	backend = "libvirt";
+	listener = "multicast";
+}
