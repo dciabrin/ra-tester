@@ -15,14 +15,14 @@
   <on_reboot>restart</on_reboot>
   <on_crash>destroy</on_crash>
   <devices>
-    <disk type='file' device='disk'>
+    <disk type='volume' device='disk'>
       <driver name='qemu' type='qcow2' cache='none'/>
-      <source file='${IMGFULLPATH}'/>
+      <source pool='${VMPOOLNAME}' volume='${IMGNAME}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
-    <disk type='file' device='cdrom'>
+    <disk type='volume' device='cdrom'>
       <driver name='qemu' type='raw'/>
-      <source file='${ISOFULLPATH}'/>
+      <source pool='${VMPOOLNAME}' volume='${ISONAME}'/>
       <target dev='vdb' bus='virtio'/>
     </disk>
     <interface type='network'>

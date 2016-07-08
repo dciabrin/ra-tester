@@ -39,6 +39,9 @@ VMPREFIXNAME=ratester
 CLUSTERNW=ratester
 SSHNW=ratesterssh
 
+# name of the storage pool that holds ra-tester VM's images
+VMPOOLNAME=ratester
+
 # Optional SSH public key to install on all created VM
 ADDITIONALSSHKEY= #$HOME/.ssh/id_rsa.pub
 
@@ -50,6 +53,8 @@ ADDITIONALCMDS= #
 
 # whether we enable SELinux on hosts or not
 SELINUX=0
+# shall we allow recreating VM if they already exist?
+TEARDOWN=0
 
 # ---- Obscure config
 
@@ -112,6 +117,7 @@ Options:
    --opt-ssh-key SSH_KEY        Optional public key to inject into created VMs
    --opt-pkgs PKG1,PKG2,...     Additional packages to install on created VMs
    --opt-cmd RUN-CMD            Additional shell command to run in the VMs before setup
+   --teardown                   Delete VMs and associated storage if they already exist
    --selinux                    Configure VMs to enable SELinux
 
 Exemple:
@@ -127,7 +133,7 @@ distro_pkg()
 
 cleanup_tmp_files()
 {
-    rm -f ${VMTMPPATH}/ratmp-*
+    rm -f ${VMTMPPATH}/ratmp-* ${VMTMPPATH}/*-data*
 }
 
 on_error()
@@ -313,28 +319,47 @@ setup_node()
 
     local nodenum=$1
 
-    echo "Creating image for ${VMPREFIXNAME}${nodenum}"
+    local IMGNAME=${VMPREFIXNAME}${nodenum}.qcow2
+    local ISONAME=${VMPREFIXNAME}${nodenum}.iso
+
+    if virsh -c ${QEMUURI} dominfo ${VMPREFIXNAME}${nodenum} &>/dev/null; then
+        echo "Delete previously defined VM ${VMPREFIXNAME}${nodenum}..."
+        virsh -c ${QEMUURI} destroy ${VMPREFIXNAME}${nodenum}
+        virsh -c ${QEMUURI} undefine ${VMPREFIXNAME}${nodenum} --remove-all-storage
+    fi
+    if virsh -c ${QEMUURI} vol-info --pool ${VMPOOLNAME} ${IMGNAME} &>/dev/null; then
+       virsh -c ${QEMUURI} vol-delete --pool ${VMPOOLNAME} ${IMGNAME} 2>/dev/null
+    fi
+    if virsh -c ${QEMUURI} vol-info --pool ${VMPOOLNAME} ${ISONAME} &>/dev/null; then
+       virsh -c ${QEMUURI} vol-delete --pool ${VMPOOLNAME} ${ISONAME} 2>/dev/null
+    fi
+
+    echo "Creating storage volume info for ${VMPREFIXNAME}${nodenum}"
     mkdir -p $VMSTORAGEPATH
-    IMGFULLPATH=$VMSTORAGEPATH/${VMPREFIXNAME}${nodenum}.qcow2
-    ISOFULLPATH=$VMSTORAGEPATH/${VMPREFIXNAME}${nodenum}.iso
-    cp ${VMBASEIMG} ${IMGFULLPATH}
+    virsh -c ${QEMUURI} vol-create-as ${VMPOOLNAME} ${IMGNAME} 10GB --format qcow2
+    virsh -c ${QEMUURI} vol-create-as ${VMPOOLNAME} ${ISONAME} 500KB --format raw
+
+    echo "Creating image for ${VMPREFIXNAME}${nodenum}"
     # we could let cloudinit set hostname, but doing it here
     # has the proper hostname propagated to dnsmasq's DHCP on the host
-    virt-customize ${VFLAGS} -a ${IMGFULLPATH} --hostname ${VMPREFIXNAME}${nodenum}
+    virt-customize ${VFLAGS} -a ${VMTMPPATH}/ratmp-base.qcow2 --hostname ${VMPREFIXNAME}${nodenum}
+    virsh -c ${QEMUURI} vol-upload --pool ${VMPOOLNAME} ${IMGNAME} ${VMTMPPATH}/ratmp-base.qcow2
 
     echo "Creating cloud-init metadata for ${VMPREFIXNAME}${nodenum}"
     DOMNAME=${VMPREFIXNAME}${nodenum} \
     CLUSTERIP=$(node_static_ip $nodenum) \
     envsubst <templates/cloudinit-meta-data.in >${VMTMPPATH}/meta-data
     envsubst <templates/cloudinit-user-data.in >${VMTMPPATH}/user-data
-    (cd ${VMTMPPATH} && genisoimage -output $ISOFULLPATH -volid cidata -joliet -rock user-data meta-data)
+    (cd ${VMTMPPATH} && genisoimage -output ${VMTMPPATH}/ratmp-${ISONAME} -volid cidata -joliet -rock user-data meta-data)
+    virsh -c ${QEMUURI} vol-upload --pool ${VMPOOLNAME} ${ISONAME} ${VMTMPPATH}/ratmp-${ISONAME}
 
     echo "Creating ${VMPREFIXNAME}${nodenum} and waiting for its IP to be assigned by DHCP"
     DOMNAME=${VMPREFIXNAME}${nodenum} \
     VMRAM=${VMRAM} \
     VMCPU=${VMCPU} \
-    IMGFULLPATH=${IMGFULLPATH} \
-    ISOFULLPATH=$ISOFULLPATH \
+    IMGNAME=${IMGNAME} \
+    ISONAME=$ISONAME \
+    VMPOOLNAME=$VMPOOLNAME \
     SSHNW=$SSHNW \
     SSHMAC=$(node_mac $SSHMAC $nodenum) \
     CLUSTERNW=$CLUSTERNW \
@@ -378,6 +403,20 @@ wait_for_pcsd()
         echo "ERROR: Failed to get pcsd status on domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
     fi
+}
+
+ensure_teardown_if_vm_exist()
+{
+    for nodenum in 1 2 3; do
+        if virsh -c ${QEMUURI} dominfo ${VMPREFIXNAME}${nodenum} &>/dev/null; then
+            if [ $TEARDOWN -eq 0 ]; then
+                echo "ERROR: VM ${VMPREFIXNAME}${nodenum} already exists. Use option --teardown to allow ra-tester to recreate VMs" >&2
+                exit 1
+            else
+                return 0
+            fi
+        fi
+    done
 }
 
 generate_ssh_keys()
@@ -438,8 +477,8 @@ while [ "$1" != "" ]; do
                 ADDITIONALCMDS="$ADDITIONALCMDS\0000"
             fi
             ADDITIONALCMDS="$ADDITIONALCMDS--run-command\0000$2"; shift 2;;
-        --selinux )
-            SELINUX=1;;
+        --teardown ) TEARDOWN="1"; shift;;
+        --selinux ) SELINUX=1; shift;;
         -h|--help ) usage; exit 0;;
         * ) echo "ERROR: unknown parameter \"$1\"" >&2
             usage
@@ -469,19 +508,25 @@ SSHMAC=$(mac_template ratester $VMPREFIXNAME 00)
 CLUSTERMAC=$(mac_template ratester $VMPREFIXNAME f0)
 CLUSTERNWGW=$(cluster_gw $VMPREFIXNAME)
 
-# # Generate ratester keys, keep if already present
+# Pre-check: ensure ra-tester can delete VMs if they already exist
+ensure_teardown_if_vm_exist
+
+# Generate ratester keys, keep if already present
 generate_ssh_keys
 
 # # Create networks in libvirt, reuse if existing
 define_networks
 
+# Create storage pool in libvirt, reuse if existing
+define_pool
+
 # Generate fencing config for fence_xvm
 generate_fence_config_and_key
 
-# # Create the and customize the base image
+# Create the and customize the base image
 prepare_base_image
 
-# # Create VMs from the base image and finish provisioning
+# Create VMs from the base image and finish provisioning
 for i in 1 2 3; do setup_node $i; done
 
 # # Dump connection setting
