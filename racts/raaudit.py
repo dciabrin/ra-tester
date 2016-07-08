@@ -27,7 +27,7 @@ Licensed under the GNU GPL.
 
 
 import sys, signal, time, os, re, string, subprocess, tempfile
-from cts.CTSaudits import ClusterAudit, AuditList, LogAudit
+from cts.CTSaudits import ClusterAudit, AuditList, LogAudit, FileAudit
 
 AllRAAuditClasses = [ ]
 

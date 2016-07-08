@@ -126,7 +126,7 @@ if __name__ == '__main__':
     log.add_stderr()
 
     all_ra_modules = load_ra_modules()
-    all_audits = AuditList(cluster_manager)
+    all_audits = RATesterAuditList(cluster_manager)
 
     env["stonith"]=False
     if env["DoFencing"]==1 or (env.has_key("DoStonith") and env["DoStonith"]==1):
