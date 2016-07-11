@@ -83,7 +83,7 @@ DISTRO_PKGS=$(cat<<PKG
 {
 "rpm-rhel": {"mariadb-galera":"mariadb-galera-server"},
 "rpm-fedora": {"mariadb-galera":"mariadb-server",
-               "fence-agents-virsh":"fence-agents-virsh,pycurl"},
+               "fence-agents-virsh":"fence-agents-virsh"},
 "rpm-centos": {"mariadb-galera":"mariadb-server",
                "galera-dbg":"galera-debuginfo"},
 "rpm": {"dig":"bind-utils",
