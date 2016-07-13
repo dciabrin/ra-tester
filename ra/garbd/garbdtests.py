@@ -205,6 +205,7 @@ class StopWhenDemotingLastGaleraNode(ClusterStart):
 
     def teardown_test(self, target):
         self.rsh_check(target, "pcs resource disable galera")
+        self.rsh_check(target, "pcs resource disable garbd")
         for n in self.Env["nodes"]:
             self.rsh_check(target, "pcs constraint remove cli-ban-galera-master-on-%s"%n)
         ClusterStart.teardown_test(self, target)
