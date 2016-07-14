@@ -241,7 +241,7 @@ prepare_base_image()
 {
     trap 'on_error $LINENO' ERR
 
-    etc_hosts=$(for i in 1 2 3; do echo -n "$(node_static_ip $i) $VMPREFIXNAME$i\n"; done)
+    local etc_hosts=$(for i in 1 2 3; do echo -n "$(node_static_ip $i) $VMPREFIXNAME$i\n"; done)
 
     echo "Creating temporary base image based on ${IMG}"
     cp ${IMG} ${VMBASEIMG}
@@ -257,7 +257,7 @@ prepare_base_image()
     echo "Preparing temporary base image"
     # startup and access
     virt-customize ${VFLAGS} -a ${VMBASEIMG} \
-        --run-command "echo -e \"$etc_hosts\" >> /etc/hosts" \
+        --run-command "\`which echo\` -e \"$etc_hosts\" >> /etc/hosts" \
         --timezone $(ls -l /etc/localtime | sed -s 's%.*/usr/share/zoneinfo/%%') \
         --run-command "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config" \
         --mkdir "/root/.ssh" \
@@ -342,7 +342,11 @@ setup_node()
     echo "Creating image for ${VMPREFIXNAME}${nodenum}"
     # we could let cloudinit set hostname, but doing it here
     # has the proper hostname propagated to dnsmasq's DHCP on the host
-    virt-customize ${VFLAGS} -a ${VMTMPPATH}/ratmp-base.qcow2 --hostname ${VMPREFIXNAME}${nodenum}
+    # NOTE: do a special dance to prevent --hostname to update /etc/hosts
+    virt-customize ${VFLAGS} -a ${VMTMPPATH}/ratmp-base.qcow2 \
+        --move /etc/hosts:/etc/hosts.tmp \
+        --hostname ${VMPREFIXNAME}${nodenum} \
+        --move /etc/hosts.tmp:/etc/hosts
     virsh -c ${QEMUURI} vol-upload --pool ${VMPOOLNAME} ${IMGNAME} ${VMTMPPATH}/ratmp-base.qcow2
 
     echo "Creating cloud-init metadata for ${VMPREFIXNAME}${nodenum}"
