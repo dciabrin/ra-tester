@@ -217,6 +217,9 @@ if __name__ == '__main__':
     verbose = env.has_key("verbose")
     for s in selected:
         desc=selected[s]
+        num_iter = env["iterations"]
+        if num_iter != None:
+            desc['tests'] *= num_iter
         num_tests = len(desc['tests'])
         log.log(">>>>>>>>>>>>>>>> Starting scenario %s (%d tests)"%(s, num_tests))
         log.log("Documentation:          %s" % desc['scenario'].__doc__)
