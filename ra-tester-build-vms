@@ -553,8 +553,9 @@ Cluster bootstrapped. You may now log in with:
 
 You're two steps away from being able to run ra-tester!
 ------------------------------------------------------
-* Step 1: let ratester know of your VMs
-Please add IP addresses of ${VMPREFIXNAME}{x} in /etc/hosts (required by ra-tester)
+* Step 1: let ra-tester know of your VMs
+   . Please add IP addresses of ${VMPREFIXNAME}{x} in /etc/hosts
+   . Please copy the contents of ssh_config_${VMPREFIXNAME} to your $HOME/.ssh/config
 
 * Step 2: prepare fencing configuration
 If you intend to use SSH-based fencing (fence_virsh):
