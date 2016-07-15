@@ -95,8 +95,10 @@ DISTRO_PKGS=$(cat<<PKG
         "pacemaker-cts":"pacemaker",
         "fence-virtd":"fence-agents",
         "fence-agents-virsh":"fence-agents",
-        "mariadb-galera":"mariadb-galera-server",
+        "fence-agents-xvm":"fence-agents",
+        "mariadb-galera":"mariadb-server",
         "galera":"galera-3",
+        "galera-dbg":"galera-3",
         "garbd":"galera-arbitrator-3"
        }
 }
@@ -274,7 +276,7 @@ prepare_base_image()
 
     # pacemaker + fencing
     virt-customize ${VFLAGS} -a ${VMBASEIMG} \
-        --install pacemaker,pacemaker-remote,$(distro_pkg pacemaker-cts) \
+        --install pacemaker,$(distro_pkg pacemaker-cts) \
         --install pcs,resource-agents \
         --install $(distro_pkg fence-virtd),$(distro_pkg fence-agents-virsh),$(distro_pkg fence-agents-xvm) \
         --password hacluster:password:ratester \
@@ -282,12 +284,39 @@ prepare_base_image()
         --mkdir /etc/cluster \
         --upload $FENCEXVMKEYNAME:/etc/cluster/fence_xvm.key
 
+    if [ "$PKG_FORMAT" == "deb" ]; then
+        # fix pcsd dependency and install manually
+        # fix pacemaker and pacemaker-remote .deb mutually exclusion (why?)
+        # fix pacemaker default runlevels for systemctl enable/disable
+        virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+             --run-command "gem install orderedhash" \
+             --run-command "sed -i \"s/'::',/'0.0.0.0',/\" /usr/share/pcsd/ssl.rb" \
+             --run-command "sed -i 's%find /var/lib%find /var/lib/pacemaker/cib%' /usr/lib/python2.7/dist-packages/pcs/cluster.py" \
+             --run-command "rm -f /etc/corosync/corosync.conf" \
+             --mkdir /var/log/cluster \
+             --run-command "touch /var/log/cluster/corosync.log" \
+             --run-command "apt-get download pacemaker-remote" \
+             --run-command "dpkg -x pacemaker-remote*.deb /" \
+             --run-command "for service in pacemaker pacemaker_remote; do sed -i -e 's/\(Default-Start:\)$/\1\t2 3 4 5/' -e 's/\(Default-Stop:\)$/\1 \t0 1 6/' /etc/init.d/\$service; done" \
+             --run-command "for service in pacemaker pacemaker_remote; do for i in 0 1 2 3 4 5 6; do cd /etc/rc\$i.d && ln -s ../init.d/\$service K01\$service; done; done"
+    else
+        virt-customize ${VFLAGS} -a ${VMBASEIMG} --install pacemaker-remote
+    fi
+
     # galera: mysql-server/galera, galera-replication/debugsymbols, garbd
     virt-customize ${VFLAGS} -a ${VMBASEIMG} \
                    --install $(distro_pkg mariadb-galera) \
                    --install $(distro_pkg galera) \
                    --install $(distro_pkg galera-dbg) \
-                   --install $(distro_pkg garbd)
+                   --install $(distro_pkg garbd) \
+                   --run-command "systemctl disable mysql"
+
+    if [ "$PKG_FORMAT" == "deb" ]; then
+        # TODO: check why resource agent spawns galera with socket
+        # settings which are different from default :/
+        virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+            --run-command "sed -i -e 's%socket\s*=.*%socket\t\t= /var/lib/mysqld/mysqld.sock%' /etc/mysql/my.cnf"
+    fi
 
     # dependencies for RA
     virt-customize ${VFLAGS} -a ${VMBASEIMG} --install screen,gdb,$(distro_pkg dig)
@@ -299,7 +328,7 @@ prepare_base_image()
         fi
     else
         virt-customize ${VFLAGS} -a ${VMBASEIMG} \
-           --run-command "sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/selinux/config"
+           --run-command "if [ -f /etc/selinux/config ]; then sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/selinux/config; fi"
     fi
 
     # convenience packages

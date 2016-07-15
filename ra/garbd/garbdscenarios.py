@@ -59,10 +59,15 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
         # galera-specific data
         self.log("Copy test-specific galera config")
         with tempfile.NamedTemporaryFile() as tmp:
+            targetlib = self.get_candidate_path(["/usr/lib64/galera/libgalera_smm.so",
+                                                 "/usr/lib/galera/libgalera_smm.so"])
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
-            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"])))
+            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"]))\
+                              .replace("{{libpath}}",targetlib) )
             tmp.flush()
-            galera_config_files = [(tmp.name,"/etc/my.cnf.d/galera.cnf")]
+            target_dir = self.get_candidate_path(["/etc/my.cnf.d", "/etc/mysql/conf.d"],
+                                                 is_dir=True)
+            galera_config_files = [(tmp.name,os.path.join(target_dir,"galera.cnf"))]
             self.copy_to_nodes(galera_config_files)
 
         remote_authkey = "/etc/pacemaker/authkey"

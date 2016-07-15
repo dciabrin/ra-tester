@@ -67,6 +67,14 @@ class RATesterScenarioComponent(ScenarioComponent):
                     rc = self.rsh(node, "chmod %s %s" % (perm, remotefile))
                     assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
 
+    def get_candidate_path(self, candidates, is_dir=False):
+        testopt = "-f" if is_dir is False else "-d"
+        target = False
+        for candidate in candidates:
+            if self.rsh(self.Env["nodes"][0], "test %s %s"%(testopt, candidate)) == 0:
+                return candidate
+        assert target
+
     def IsApplicable(self):
         return 1
 
