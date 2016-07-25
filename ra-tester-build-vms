@@ -484,6 +484,7 @@ init_cluster()
     ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "pcs cluster auth ${cluster_nodes} -u hacluster -p ratester"
     ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "pcs cluster setup --force --name ratester ${cluster_nodes}"
     ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "pcs cluster start --all"
+    ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "pcs property set stonith-enabled=false"
 }
 
 generate_ssh_config()
