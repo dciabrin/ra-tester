@@ -40,8 +40,7 @@ from cts.logging   import LogFactory
 from cts.remote    import RemoteFactory
 from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
-
-
+from racts.rapatterns import RATemplates
 
 class ReuseCluster(ScenarioComponent):
     '''Use an existing cluster for running tests.
@@ -66,6 +65,7 @@ class ResourceAgentTest(CTSTest):
         self.name = "GenericRATest"
         self.bg = {}
         self.verbose = verbose
+        self.ratemplates = RATemplates()
 
     def setup(self, node):
         '''Setup test before execution'''

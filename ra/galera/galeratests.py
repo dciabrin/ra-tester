@@ -58,9 +58,9 @@ class GaleraTest(ResourceAgentTest):
     def setup_test(self, node):
         '''Setup the given test'''
         # create a galera resource, without starting it yet
-        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE\s.*origin=notify_crmd"]
-        patterns += [r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("galera", "not running", n) \
-                    for n in self.Env["nodes"]]
+        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
+        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe", "galera", n, 'not running') \
+                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(node,
@@ -69,6 +69,7 @@ class GaleraTest(ResourceAgentTest):
         # Note: starting in target-role:Stopped first triggers a demote, then a stop
         # Note: adding a resource forces a first probe (INFO: MySQL is not running)
         watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
 
     def teardown_test(self, node):
         # handy debug hook
@@ -112,7 +113,7 @@ class ClusterStart(GaleraTest):
         # clean errors and force probe current state
         # this is my way of ensure pacemaker will "promote" nodes
         # rather than just "monitoring" and finding "Master" state
-        patterns = [r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("galera", "not running", n) \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", "galera", n, 'not running') \
                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
@@ -121,7 +122,7 @@ class ClusterStart(GaleraTest):
         assert not watch.unmatched, watch.unmatched
 
         # need to enable galera-master because of how we created the resource
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", n) \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", n, 'ok') \
                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
@@ -142,7 +143,7 @@ class ClusterStop(ClusterStart):
         # start cluster
         ClusterStart.test(self,dummy)
 
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "stop", n) \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", n, 'ok') \
                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
 
@@ -198,7 +199,7 @@ class NodeForceStartBootstrap(GaleraTest):
             self.rsh_check(n, "crm_attribute -N %s -l reboot --name master-galera:0 -D"%n)
 
         # instruct pacemaker to re-probe the state of the galera resource
-        pattern = r"crmd.*:\s*Operation %s_monitor.*:\s*%s \(node=%s,.*,\s*confirmed=true\)"%("galera", "master", target)
+        pattern = self.ratemplates.build("Pat:RscRemoteOp", "probe", "galera", target, 'master')
         watch = self.create_watch([pattern], self.Env["DeadTime"])
 
         watch.setwatch()
@@ -243,7 +244,7 @@ class NodeForceStartJoining(ClusterStart):
 
         # we want to track (1) and (2).
         # TODO: double check (1) and (2) with attribute "sync-needed"
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", node)]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", node, 'ok')]
         # newer version of the RA
         # patterns = [r"INFO: Node <%s> is joining the cluster"%(node,),
         #             r"INFO: local node synced with the cluster"]
@@ -330,7 +331,7 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
         time.sleep(3)
 
         patterns = [r"local node.*was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover",
-                    self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", target)]
+                    self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", target, 'ok')]
         # newer version of the RA
         # patterns += [r"Node <%s> is joining the cluster"%(target,),
         #              r"INFO: local node synced with the cluster"]
@@ -452,7 +453,7 @@ class NodeRecoverWhileStartingCluster(ClusterStart):
         # clean up errors in cib before re-enabling pacemaker,
         # this will also prevent pacemaker to try to restart the
         # killed node before stop. (TODO: am i correct here?)
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "stop", n) \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", n, 'ok') \
                     for n in self.Env["nodes"] if n != target]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
@@ -511,7 +512,7 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
         patterns = [r"local node <%s> is started, but not in primary mode. Unknown state." % target,
                    r"Node <%s> is bootstrapping the cluster" % target] + \
                    [r"local node <%s> was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover"%node for node in to_break] + \
-                   [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", node) for node in self.Env["nodes"]]
+                   [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", node, 'ok') for node in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(target, "mysql -e 'insert into racts.break values (42);'")
@@ -560,7 +561,8 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
         # NOTE: bootstrapping a node which doesn't have grastate.dat
         # will result in the cluster's seqno to restart from 0
         patterns = [r"local node <%s> was not shutdown properly. Rollback stuck transaction with --tc-heuristic-recover"%node for node in all_nodes] + \
-                   [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", node) for node in all_nodes]
+                   [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", node, 'ok') for node in all_nodes]
+
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(target, "mysql -e 'insert into racts.break values (42);'", expected=1)

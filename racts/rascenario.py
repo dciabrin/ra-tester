@@ -39,7 +39,7 @@ from cts.logging   import LogFactory
 from cts.remote    import RemoteFactory
 from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
-
+from racts.rapatterns import RATemplates
 
 class RATesterScenarioComponent(ScenarioComponent):
     '''Assertion-friendly base class for scenario setup/teardown.
@@ -49,6 +49,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger = LogFactory()
         self.Env = environment
         self.verbose = verbose
+        self.ratemplates = RATemplates()
 
     def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False):
         for node in self.Env["nodes"]:

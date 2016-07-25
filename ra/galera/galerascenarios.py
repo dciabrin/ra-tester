@@ -104,8 +104,8 @@ class GaleraNewCluster(RATesterScenarioComponent):
 
         # create a new cluster
         # note: setting up cluster disable pacemaker service. re-enable it
-        patterns = [r"crmd.*:\s*notice:\sState\stransition\sS_STARTING\s->.*origin=do_started",
-                    r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE\s.*origin=notify_crmd"]
+        patterns = [r"crmd.*:\s*notice:\sState\stransition\sS_STARTING(\s->.*origin=do_started)?",
+                    r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
         watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=self.Env["nodes"])
         watch.setwatch()
         self.rsh_check(self.Env["nodes"][0], "pcs cluster setup --force --name ratester %s" % \
@@ -116,6 +116,7 @@ class GaleraNewCluster(RATesterScenarioComponent):
         # is in charge of enabling it if requested
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=false")
         watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
 
     def teardown_scenario(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")

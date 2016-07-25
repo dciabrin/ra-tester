@@ -144,9 +144,9 @@ class ClusterStart(GarbdRemoteTest):
         self.rsh_check(target, "pcs resource cleanup garbd")
 
         # need to enable galera-master because of how we created the resource
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", n) \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", n, 'ok') \
                     for n in self.Env["nodes"]]
-        patterns += [self.templates["Pat:RscRemoteOpOK"] %("garbd", "start", "arb")]
+        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "start", "garbd", "arb", 'ok')]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(target, "pcs resource enable galera-master")
@@ -165,9 +165,9 @@ class ClusterStop(ClusterStart):
         # start cluster
         ClusterStart.test(self,target)
 
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "stop", n) \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", n, 'ok') \
                     for n in self.Env["nodes"]]
-        patterns += [self.templates["Pat:RscRemoteOpOK"] %("garbd", "stop", "arb")]
+        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "stop", "garbd", "arb", 'ok')]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(target, "pcs resource disable galera")
@@ -192,11 +192,11 @@ class StopWhenDemotingLastGaleraNode(ClusterStart):
         ClusterStart.test(self,target)
 
         for ban_node in self.Env["nodes"]:
-            patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "stop", ban_node)]
+            patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", ban_node, 'ok')]
             # last node? ensure garbd stops before galera,
             # to prevent garbd "monitor" failures
             if ban_node == self.Env["nodes"][-1]:
-                patterns += [self.templates["Pat:RscRemoteOpOK"] %("garbd", "stop", "arb")]
+                patterns += [self.ratemplates.build("Pat:RscRemoteOp", "stop", "garbd", "arb", 'ok')]
             watch = self.create_watch(patterns, self.Env["DeadTime"])
             watch.setwatch()
             self.rsh_check(target, "pcs resource ban galera-master %s"%ban_node)
@@ -328,7 +328,7 @@ class FenceNodeAfterNetworkDisconnection(ClusterStart):
 
         # restart pacemaker on the fenced node, and wait for galera to
         # come up on that node
-        patterns = [self.templates["Pat:RscRemoteOpOK"] %("galera", "promote", fenced_node)]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", fenced_node, 'ok')]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(fenced_node, "systemctl enable pacemaker")
