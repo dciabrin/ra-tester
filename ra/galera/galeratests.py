@@ -319,6 +319,11 @@ class NodeRecoverWhileClusterIsRunning(ClusterStart):
         GaleraTest.__init__(self,cm)
         self.name = "NodeRecoverWhileClusterIsRunning"
 
+    def is_applicable(self):
+        # mariadb 10.1+ seems to be immune to pending XA
+        return self.rsh(self.Env["nodes"][0],
+                        "mysql --version | awk '{print $5}' | awk -F. '$1==5 && $2==5 {print 1}' | grep 1") == 0
+
     def test(self, target):
         # start cluster, prepare nodes to be killed
         ClusterStart.test(self,target)
@@ -357,6 +362,10 @@ class NodeDontChooseForBootstrappingCluster(ClusterStart):
     def __init__(self, cm):
         GaleraTest.__init__(self,cm)
         self.name = "NodeDontChooseForBootstrappingCluster"
+
+    def is_applicable(self):
+        return self.rsh(self.Env["nodes"][0],
+                        "grep no-grastate /usr/lib/ocf/resource.d/heartbeat/galera") == 0
 
     def test(self, target):
         # The bootstrap node selection is an ordered process,
