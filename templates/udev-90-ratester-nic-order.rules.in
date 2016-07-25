@@ -1,0 +1,2 @@
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="virtio-pci", ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", ATTR{address}=="${SSHMAC}", NAME="eth0"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="virtio-pci", ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="eth*", ATTR{address}=="${CLUSTERMAC}", NAME="eth1"

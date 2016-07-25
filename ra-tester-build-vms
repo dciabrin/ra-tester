@@ -368,11 +368,17 @@ setup_node()
     virsh -c ${QEMUURI} vol-create-as ${VMPOOLNAME} ${IMGNAME} 10GB --format qcow2
     virsh -c ${QEMUURI} vol-create-as ${VMPOOLNAME} ${ISONAME} 500KB --format raw
 
+    echo "Forcing order of network interface cards for ${VMPREFIXNAME}${nodenum}"
+    SSHMAC=$(node_mac $SSHMAC $nodenum) \
+    CLUSTERMAC=$(node_mac $CLUSTERMAC $nodenum) \
+    envsubst <templates/udev-90-ratester-nic-order.rules.in >${VMTMPPATH}/90-ratester-nic-order.rules
+
     echo "Creating image for ${VMPREFIXNAME}${nodenum}"
     # we could let cloudinit set hostname, but doing it here
     # has the proper hostname propagated to dnsmasq's DHCP on the host
     # NOTE: do a special dance to prevent --hostname to update /etc/hosts
     virt-customize ${VFLAGS} -a ${VMTMPPATH}/ratmp-base.qcow2 \
+        --upload ${VMTMPPATH}/90-ratester-nic-order.rules:/etc/udev/rules.d \
         --move /etc/hosts:/etc/hosts.tmp \
         --hostname ${VMPREFIXNAME}${nodenum} \
         --move /etc/hosts.tmp:/etc/hosts
