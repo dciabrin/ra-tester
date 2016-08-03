@@ -352,8 +352,11 @@ setup_node()
     local ISONAME=${VMPREFIXNAME}${nodenum}.iso
 
     if virsh -c ${QEMUURI} dominfo ${VMPREFIXNAME}${nodenum} &>/dev/null; then
-        echo "Delete previously defined VM ${VMPREFIXNAME}${nodenum}..."
-        virsh -c ${QEMUURI} destroy ${VMPREFIXNAME}${nodenum}
+        if virsh -c ${QEMUURI} domstate ${VMPREFIXNAME}${nodenum} | grep -q running; then
+            echo "Stopping previously defined VM ${VMPREFIXNAME}${nodenum}..."
+            virsh -c ${QEMUURI} destroy ${VMPREFIXNAME}${nodenum}
+        fi
+        echo "Deleting previously defined VM ${VMPREFIXNAME}${nodenum}..."
         virsh -c ${QEMUURI} undefine ${VMPREFIXNAME}${nodenum} --remove-all-storage
     fi
     if virsh -c ${QEMUURI} vol-info --pool ${VMPOOLNAME} ${IMGNAME} &>/dev/null; then
