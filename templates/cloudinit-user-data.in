@@ -1,4 +1,6 @@
 #cloud-config
+hostname: ${DOMNAME}
+fqdn: ${DOMNAME}
 manage_etc_hosts: false
 users:
   - name: root

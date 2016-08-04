@@ -391,6 +391,7 @@ setup_node()
     DOMNAME=${VMPREFIXNAME}${nodenum} \
     CLUSTERIP=$(node_static_ip $nodenum) \
     envsubst <templates/cloudinit-meta-data.in >${VMTMPPATH}/meta-data
+    DOMNAME=${VMPREFIXNAME}${nodenum} \
     envsubst <templates/cloudinit-user-data.in >${VMTMPPATH}/user-data
     (cd ${VMTMPPATH} && genisoimage -output ${VMTMPPATH}/ratmp-${ISONAME} -volid cidata -joliet -rock user-data meta-data)
     virsh -c ${QEMUURI} vol-upload --pool ${VMPOOLNAME} ${ISONAME} ${VMTMPPATH}/ratmp-${ISONAME}
