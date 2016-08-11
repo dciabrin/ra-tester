@@ -87,6 +87,13 @@ DISTRO_PKGS=$(cat<<PKG
                "fence-agents-virsh":"fence-agents-virsh"},
 "rpm-centos": {"mariadb-galera":"mariadb-server",
                "galera-dbg":"galera-debuginfo"},
+"rpm-opensuse": {"fence-virtd":"fence-agents",
+                 "fence-agents-virsh":"fence-agents",
+                 "fence-agents-xvm":"fence-agents",
+                 "mariadb-galera":"mariadb-server",
+                 "galera":"galera-3",
+                 "galera-dbg":"galera-3",
+                 "garbd":"galera-3"},
 "rpm": {"dig":"bind-utils",
         "fence-agents-xvm": "fence-virt",
         "galera":"galera",
@@ -301,6 +308,15 @@ prepare_base_image()
              --run-command "dpkg -x pacemaker-remote*.deb /" \
              --run-command "for service in pacemaker pacemaker_remote; do sed -i -e 's/\(Default-Start:\)$/\1\t2 3 4 5/' -e 's/\(Default-Stop:\)$/\1 \t0 1 6/' /etc/init.d/\$service; done" \
              --run-command "for service in pacemaker pacemaker_remote; do for i in 0 1 2 3 4 5 6; do cd /etc/rc\$i.d && ln -s ../init.d/\$service K01\$service; done; done"
+    elif [ "$PKG_FORMAT" == "rpm" -a "$DISTRO" == "opensuse" ]; then
+        virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+             --run-command "sed -i \"s/'::'/'0.0.0.0'/\" /usr/lib/pcsd/ssl.rb" \
+             --run-command "sed -i 's/\(\S\S*\)\(\s\s*\)\(\S\S*\)\(\s\s*\)\(\S\S*\)/\1\2\3\4common-\1/' /etc/pam.d/pcsd" \
+             --run-command "sed -i 's%/usr/libexec/%/usr/lib/%' /usr/lib/pcsd/settings.rb" \
+             --run-command "sed -i 's%/usr/libexec/%/usr/lib/%' /usr/lib/python2.7/site-packages/pcs/settings_default.py" \
+             --install pacemaker-remote
+             # --run-command "sed -i 's/self._apply_hostname(hostname)/self._apply_hostname(writeable_hostname)/' /usr/lib/python2.7/site-packages/cloudinit/distros/__init__.py"
+             # --run-command "grub2-mkconfig > /boot/grub2/grub.cfg" # <- to avoid reboot issues
     else
         virt-customize ${VFLAGS} -a ${VMBASEIMG} --install pacemaker-remote
     fi
@@ -431,6 +447,10 @@ wait_for_node()
         echo "ERROR: Failed to get SSH connection to domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
     fi
+
+    # tmp for opensuse: fix reboot
+    echo "Update grub to fix reboot on ${VMPREFIXNAME}${nodenum}"
+    ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "grub2-mkconfig > /boot/grub2/grub.cfg"
 }
 
 wait_for_pcsd()
