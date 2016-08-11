@@ -123,6 +123,7 @@ class ResourceAgentTest(CTSTest):
         temp="ratester-tmp%f"%time.time()
         res=self.rsh(target, command+" &>"+temp)
         if res != expected:
+            if type(res) is list: res = res[0]
             self.rsh(target, "mv %s '%s-%s-%d'"%(temp, temp, command, res))
         else:
             self.rsh(target, "rm -f %s"%temp)
@@ -136,7 +137,7 @@ class ResourceAgentTest(CTSTest):
         # self.rsh_check(target, "screen -S %s -X stuff '%s\r'"%(self.name,command) )
         self.rsh_check(target, "screen -S %s -d -m %s"%(self.name,command) )
 
-    def wait_until_restarted(self, node, timeout=60):
+    def wait_until_restarted(self, node, timeout=300):
         start=time.time()
         alive = False
         while not alive:
