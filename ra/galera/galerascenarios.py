@@ -43,6 +43,43 @@ from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
 
+class GaleraSetupMixin(object):
+    def mysql_etc_dir(self):
+        target_dir = self.get_candidate_path(["/etc/my.cnf.d", "/etc/mysql/conf.d"],
+                                             is_dir=True)
+        return target_dir
+
+    def init_and_setup_mysql_defaults(self):
+        self.log("Ensuring minimal mysql configuration")
+        for node in self.Env["nodes"]:
+            rc = self.rsh(node,
+                          "if [ ! -d /var/lib/mysql ]; then "
+                          "mkdir /var/lib/mysql &&"
+                          "chown mysql. /var/lib/mysql; fi")
+            assert rc == 0, "could not create dir on remote node %s" % node
+            etc_dir = self.mysql_etc_dir()
+            rc = self.rsh(node,
+                          "if ! `my_print_defaults --mysqld | grep -q socket`; then "
+                          "echo -e '[mysqld]\nsocket=/var/lib/mysql/mysql.sock\n"
+                          "[client]\nsocket=/var/lib/mysql/mysql.sock'"
+                          ">%s/ratester.cnf; fi" %etc_dir)
+            assert rc == 0, "could not override mysql settings on node %s" % node
+
+    def setup_galera_config(self):
+        self.log("Copying test-specific galera config")
+        with tempfile.NamedTemporaryFile() as tmp:
+            targetlib = self.get_candidate_path(["/usr/lib64/galera/libgalera_smm.so",
+                                                 "/usr/lib/galera/libgalera_smm.so",
+                                                 "/usr/lib64/galera-3/libgalera_smm.so"])
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
+            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"]))\
+                              .replace("{{libpath}}",targetlib) )
+            tmp.flush()
+            target_dir = self.mysql_etc_dir()
+            galera_config_files = [(tmp.name,os.path.join(target_dir,"galera.cnf"))]
+            self.copy_to_nodes(galera_config_files)
+
+
 scenarios = {}
 
 class Galera(Sequence):
@@ -50,7 +87,7 @@ class Galera(Sequence):
 
 scenarios[Galera]=[]
 
-class GaleraNewCluster(RATesterScenarioComponent):
+class GaleraNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
     def __init__(self, environment, verbose=False):
         RATesterScenarioComponent.__init__(self, environment, verbose)
 
@@ -78,18 +115,9 @@ class GaleraNewCluster(RATesterScenarioComponent):
                     "failed to copy data \"%s\" on remote node \"%s\"" % \
                     (src, node)
 
-        self.log("Copy test-specific galera config")
-        with tempfile.NamedTemporaryFile() as tmp:
-            targetlib = self.get_candidate_path(["/usr/lib64/galera/libgalera_smm.so",
-                                                 "/usr/lib/galera/libgalera_smm.so"])
-            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
-            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"]))\
-                              .replace("{{libpath}}",targetlib) )
-            tmp.flush()
-            target_dir = self.get_candidate_path(["/etc/my.cnf.d", "/etc/mysql/conf.d"],
-                                                 is_dir=True)
-            galera_config_files = [(tmp.name,os.path.join(target_dir,"galera.cnf"))]
-            self.copy_to_nodes(galera_config_files)
+        # mysql setup
+        self.init_and_setup_mysql_defaults()
+        self.setup_galera_config()
 
         # clean up any traffic control on target network interface
         for node in self.Env["nodes"]:

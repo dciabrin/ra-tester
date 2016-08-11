@@ -41,6 +41,8 @@ from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
 
+from ra.galera.galerascenarios import GaleraSetupMixin
+
 scenarios = {}
 
 class GarbdRemote(Sequence):
@@ -48,7 +50,7 @@ class GarbdRemote(Sequence):
 
 scenarios[GarbdRemote]=[]
 
-class GarbdRemoteNewCluster(RATesterScenarioComponent):
+class GarbdRemoteNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
     def __init__(self, environment, verbose=False):
         RATesterScenarioComponent.__init__(self, environment, verbose)
 
@@ -56,19 +58,9 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent):
         return not self.Env.has_key("keep_cluster")
 
     def setup_scenario(self, cluster_manager):
-        # galera-specific data
-        self.log("Copy test-specific galera config")
-        with tempfile.NamedTemporaryFile() as tmp:
-            targetlib = self.get_candidate_path(["/usr/lib64/galera/libgalera_smm.so",
-                                                 "/usr/lib/galera/libgalera_smm.so"])
-            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
-            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"]))\
-                              .replace("{{libpath}}",targetlib) )
-            tmp.flush()
-            target_dir = self.get_candidate_path(["/etc/my.cnf.d", "/etc/mysql/conf.d"],
-                                                 is_dir=True)
-            galera_config_files = [(tmp.name,os.path.join(target_dir,"galera.cnf"))]
-            self.copy_to_nodes(galera_config_files)
+        # mysql setup
+        self.init_and_setup_mysql_defaults()
+        self.setup_galera_config()
 
         remote_authkey = "/etc/pacemaker/authkey"
         if not self.rsh.exists_on_all(remote_authkey, self.Env["nodes"]):
