@@ -104,7 +104,7 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
         res=self.rsh_check(self.Env["arb"], "systemctl enable pacemaker_remote")
         res=self.rsh_check(self.Env["arb"], "systemctl start pacemaker_remote")
 
-        remote_ok_pat = r"crmd.*:\s*Operation %s_start.*:\s*ok \(node=.*,\s*confirmed=true\)"%("arb",)
+        remote_ok_pat = self.ratemplates.build("Pat:RscRemoteOp", "start", "arb", "\S+", "ok")
         watch=LogWatcher(self.Env["LogFileName"], [remote_ok_pat], None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=self.Env["nodes"])
         # watch = self.create_watch([remote_ok_pat], self.Env["DeadTime"])
         watch.setwatch()

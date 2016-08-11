@@ -56,7 +56,7 @@ class GarbdRemoteTest(ResourceAgentTest):
     def setup_test(self, node):
         '''Setup the given test'''
         # create galera and garbd resources, without starting them yet
-        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE\s.*origin=notify_crmd"]
+        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
         for n in self.Env["nodes"]:
             patterns += [r"%s\S*\sattrd.*:\s*notice:\sUpdating\sall\sattributes\safter\scib_refresh_notify\sevent"%n]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
@@ -107,6 +107,7 @@ class GarbdRemoteTest(ResourceAgentTest):
         # to do anything. catch those two cases in the patterns
         self.rsh_check(node, "pcs resource unmanage galera")
         patterns = ["("+r"crmd.*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n)+ \
+                    "|"+r"notice:\sResult\sof\sprobe\soperation\sfor\s%s\son\s%s"%("galera",n)+ \
                     "|"+r"notice:\sForcing\sunmanaged\smaster\s.*\sto\sremain\spromoted\son\s%s"%n+")"
                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
