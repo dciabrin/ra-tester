@@ -332,7 +332,7 @@ prepare_base_image()
                    --install $(distro_pkg galera) \
                    --install $(distro_pkg galera-dbg) \
                    --install $(distro_pkg garbd) \
-                   --run-command "systemctl disable mysql"
+                   --run-command "if ! systemctl disable mysql 2>/dev/null; then systemctl disable mariadb; fi"
 
     if [ "$PKG_FORMAT" == "deb" ]; then
         # TODO: check why resource agent spawns galera with socket
