@@ -163,10 +163,12 @@ if __name__ == '__main__':
                 }
 
     # --choose scenario1:test1,scenario2:test4,scenario3,scenario1:test2
-    if len(env["tests"]) != 0:
+    # split and flatten tests in case command line have several --choose
+    parsed_tests=sum([t.split(",") for t in env["tests"]], [])
+    if len(parsed_tests) != 0:
         match = None
         chosen={}
-        for name in env["tests"]:
+        for name in parsed_tests:
             if ':' not in name:
                 name = name+':'
             scenario, test = name.split(":",1)
