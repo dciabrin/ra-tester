@@ -240,7 +240,7 @@ node_dhcp_ip()
     trap 'on_error $LINENO' ERR
 
     local nodenum=$1
-    echo $(virsh -c ${QEMUURI} net-dhcp-leases $SSHNW | awk "/"$(node_mac $SSHMAC $nodenum)"/ {print \$5}" | sed 's%/.*%%')
+    echo $(virsh -c ${QEMUURI} net-dhcp-leases $SSHNW | awk "/"$(node_mac $SSHMAC $nodenum)"/ {print \$5}" | head -1 | sed 's%/.*%%')
 }
 
 node_static_ip()
