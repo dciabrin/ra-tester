@@ -55,6 +55,8 @@ ADDITIONALCMDS= #
 SELINUX=0
 # shall we allow recreating VM if they already exist?
 TEARDOWN=0
+# keep tmp files for debugging problems
+SAVETEMPS=0
 
 VFLAGS=
 
@@ -130,6 +132,7 @@ Options:
    --teardown                   Delete VMs and associated storage if they already exist
    --selinux                    Configure VMs to enable SELinux
    --verbose                    run all virsh command in verbose mode
+   --save-temps                 Keep intermediate images and files
 
 Exemple:
    $(basename $0) --img ./Fedora-Cloud-Base-24-1.2.x86_64.qcow2 --name ratester
@@ -144,7 +147,9 @@ distro_pkg()
 
 cleanup_tmp_files()
 {
-    rm -f ${VMTMPPATH}/ratmp-* ${VMTMPPATH}/*-data*
+    if [ $SAVETEMPS -ne 1 ]; then
+        rm -f ${VMTMPPATH}/ratmp-* ${VMTMPPATH}/*-data* ${VMTMPPATH}/*.rules
+    fi
 }
 
 on_error()
@@ -546,6 +551,7 @@ while [ "$1" != "" ]; do
         --teardown ) TEARDOWN="1"; shift;;
         --selinux ) SELINUX=1; shift;;
         --verbose ) VFLAGS="$VFLAGS -v"; shift;;
+        --save-temps ) SAVETEMPS=1; shift;;
         -h|--help ) usage; exit 0;;
         * ) echo "ERROR: unknown parameter \"$1\"" >&2
             usage
