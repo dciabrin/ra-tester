@@ -288,6 +288,10 @@ prepare_base_image()
         echo -ne "$ADDITIONALCMDS" | xargs -0 virt-customize ${VFLAGS} -a ${VMBASEIMG}
     fi
 
+    # ensure lp#1577982 is fixed otherwise cloud-init fail to assign ip properly
+    virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+        --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/site-packages/cloudinit/sources/DataSourceNoCloud.py"
+
     # pacemaker + fencing
     virt-customize ${VFLAGS} -a ${VMBASEIMG} \
         --install pacemaker,$(distro_pkg pacemaker-cts) \
@@ -445,7 +449,7 @@ wait_for_node()
     local nodeip=$(node_dhcp_ip $nodenum)
 
     # the node may reboot when first started, so loop here
-    # until the scp is successful
+    # until ssh is successful, rather than just ping
     echo "Wait until we can connect to ${VMPREFIXNAME}${nodenum}"
     timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS root@$nodeip true 2>/dev/null; do sleep 2; done"
     if [ $? -ne 0 ]; then
@@ -454,8 +458,20 @@ wait_for_node()
     fi
 
     # tmp for opensuse: fix reboot
-    echo "Update grub to fix reboot on ${VMPREFIXNAME}${nodenum}"
-    ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "grub2-mkconfig > /boot/grub2/grub.cfg"
+    if [ "$PKG_FORMAT" == "rpm" -a "$DISTRO" == "opensuse" ]; then
+        echo "Update grub to fix reboot on ${VMPREFIXNAME}${nodenum}"
+        ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "grub2-mkconfig > /boot/grub2/grub.cfg"
+    fi
+
+    # cloud-init and nocloud ds: ensure that cluster nw nic is brought up
+    echo "Ensure reboot succeeds and cluster network is up"
+    ssh -i $LOGINKEYNAME $SSH_OPTS root@$nodeip "reboot && cat" || true
+    local clustermac=$(node_mac $CLUSTERMAC $nodenum)
+    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS root@$nodeip \"ip link | grep -B1 $clustermac | head -1 | grep -q 'state UP'\" 2>/dev/null; do sleep 2; done"
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to get verify cluster network status on domain ${VMPREFIXNAME}${nodenum}" >&2
+        exit 1
+    fi
 }
 
 wait_for_pcsd()
