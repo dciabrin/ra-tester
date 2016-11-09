@@ -714,3 +714,56 @@ class ClusterStartWith2LongRunningSST(NodeLongRunningSST):
         ClusterStart.teardown_test(self, target)
 
 tests.append(ClusterStartWith2LongRunningSST)
+
+
+class RestartAfterAllCorosyncsNodeWentInquorate(ClusterStart):
+    '''
+    '''
+
+    def __init__(self, cm):
+        GaleraTest.__init__(self,cm)
+        self.name = "RestartAfterAllCorosyncsNodeWentInquorate"
+
+    def is_applicable(self):
+        return True
+
+    def setup_test(self, target):
+        ClusterStart.setup_test(self, target)
+        self.iface="eth1"
+
+    def test(self, target):
+        # raise the promote timeout to give a chance to the RA to recover after
+        # network partition
+        self.rsh_check(target, "pcs resource update galera op promote on-fail=block timeout=40")
+
+        # start cluster
+        ClusterStart.test(self, target)
+
+        # segregate the corosync node so they lose quorum and stop galera
+        patterns = [self.ratemplates.build("Pat:InitRemoteOp", "demote", "galera", n) \
+                    for n in self.Env["nodes"]]
+
+        # patterns = [r"%s.*Initiating action.*:.*%s.*%s_%s"%(n, "demote", "galera", "demote") \
+        #             for n in self.Env["nodes"]]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        for n in self.Env["nodes"]:
+            self.rsh_check(n, "iptables -I INPUT 1 -i %s -p udp -m udp --dport 5405 -j DROP"%\
+                           self.iface)
+        watch.lookforall()
+
+        # patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", n, 'ok') \
+        #             for n in self.Env["nodes"]]
+        # watch = self.create_watch(patterns, self.Env["DeadTime"])
+        # watch.setwatch()
+        for n in self.Env["nodes"]:
+            self.rsh_check(n, "iptables -D INPUT -i %s -p udp -m udp --dport 5405 -j DROP"%\
+                           self.iface)
+        # watch.lookforall()
+        # assert not watch.unmatched, watch.unmatched
+
+    def errorstoignore(self):
+        return GaleraTest.errorstoignore(self) + \
+            [r"error: Node.*appears to be online even though we think it is dead"]
+
+tests.append(RestartAfterAllCorosyncsNodeWentInquorate)

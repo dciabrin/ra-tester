@@ -29,7 +29,8 @@ Licensed under the GNU GPL.
 class RATemplates(object):
     def __init__(self):
         self.fun_patterns = {
-            "Pat:RscRemoteOp": self.pat_rsc_remote_op
+            "Pat:RscRemoteOp": self.pat_rsc_remote_op,
+            "Pat:InitRemoteOp": self.pat_init_remote_op
         }
 
     def build(self, template, *args):
@@ -45,3 +46,9 @@ class RATemplates(object):
                r"Operation %s_%s.*:\s*%s \(node=%s,.*,\s*confirmed=true\))"%\
             (operation, resource, node, status, resource,
              "monitor" if operation == "probe" else operation, status, node)
+
+    def pat_init_remote_op(self, operation, resource, node):
+        return r"crmd.*:\s*.*(Initiating %s operation %s_%s_0 locally on %s|"\
+               r"Initiating action.*:.*%s.*%s_%s.*%s)"%\
+               (operation, resource, operation, node,
+                operation, resource, operation, node)
