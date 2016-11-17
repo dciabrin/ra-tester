@@ -98,7 +98,7 @@ class GaleraTest(ResourceAgentTest):
             r"ERROR: Unable to retrieve wsrep_cluster_status, verify check_user",
             r"ERROR: local node <.*> is started, but not in primary mode. Unknown state.",
             r"ERROR: MySQL not running: removing old PID file",
-            r"notice:\s.*-galera_monitor_.*:.*\s\[\sERROR\s.*\s\(HY000\): Lost\sconnection\sto\sMySQL\sserver"
+            r"notice:\s.*galera_monitor_.*:.*\s\[\sERROR\s.*\s\(HY000\): Lost\sconnection\sto\sMySQL\sserver"
         ]
 
 
