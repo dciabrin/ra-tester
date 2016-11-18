@@ -64,7 +64,7 @@ class GaleraTest(ResourceAgentTest):
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(node,
-                       "pcs resource create galera galera enable_creation=true wsrep_cluster_address='gcomm://%s' meta master-max=3 ordered=true --master --disabled"% \
+                       "pcs resource create galera galera enable_creation=true wsrep_cluster_address='gcomm://%s' op promote on-fail=block meta master-max=3 --master --disabled"% \
                        ",".join(self.Env["nodes"]))
         # Note: starting in target-role:Stopped first triggers a demote, then a stop
         # Note: adding a resource forces a first probe (INFO: MySQL is not running)
