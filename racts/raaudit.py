@@ -47,7 +47,7 @@ class SHMAudit(ClusterAudit):
 
             if node in self.CM.ShouldBeStatus and self.CM.ShouldBeStatus[node] == "down":
                 clean = 0
-                (rc, lsout) = self.CM.rsh(node, "ls -al /dev/shm | grep qb-", None)
+                (rc, lsout) = self.CM.rsh(node, "sudo ls -al /dev/shm | grep qb-", None)
                 for line in lsout:
                     result = 0
                     clean = 1
@@ -57,7 +57,7 @@ class SHMAudit(ClusterAudit):
                     for line in lsout:
                         self.CM.debug("ps[%s]: %s" % (node, line))
 
-                    self.CM.rsh(node, "rm -f /dev/shm/qb-*")
+                    self.CM.rsh(node, "sudo rm -f /dev/shm/qb-*")
 
             else:
                 self.CM.debug("Skipping %s" % node)

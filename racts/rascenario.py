@@ -59,7 +59,7 @@ class RATesterScenarioComponent(ScenarioComponent):
                     rc = self.rsh(node, "mkdir -p %s" % remotedir)
                     assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
-                rc = self.rsh.cp(src, "root@%s:%s" % (node, remotefile))
+                rc = self.rsh.cp(src, "%s:%s" % (node, remotefile))
                 assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
                 if owner:
                     rc = self.rsh(node, "chown %s %s" % (owner, remotefile))

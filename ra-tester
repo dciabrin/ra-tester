@@ -120,6 +120,9 @@ if __name__ == '__main__':
     # TODO: get rid of those temporary hooks in CTS
     prepare_cts()
 
+    RemoteFactory.rsh.Command="ssh -l heat-admin -n -x -o ServerAliveInterval=5 -o ConnectTimeout=10 -o TCPKeepAlive=yes -o ServerAliveCountMax=3"
+    RemoteFactory.rsh.CpCommand="scp -o User=heat-admin -B -q"
+
     env = CtsLab(["--stonith","no"]+sys.argv[1:])
     cluster_manager = crm_mcp(env)
     log=LogFactory()

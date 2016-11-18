@@ -51,7 +51,7 @@ class RATesterFencingComponent(RATesterScenarioComponent):
             self.Env["stonith-params"] = ""
         elif self.Env["stonith-type"] == "external/ssh":
             self.Env["stonith-type"] = "fence_virsh"
-            self.Env["stonith-params"] = "ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key "%os.environ["USERNAME"]
+            self.Env["stonith-params"] = "ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key "%os.geteuid()
 
     def IsApplicable(self):
         return self.Env["stonith"] == True
