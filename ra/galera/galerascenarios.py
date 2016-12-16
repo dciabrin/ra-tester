@@ -82,19 +82,23 @@ class GaleraSetupMixin(object):
 
 scenarios = {}
 
-class Galera(Sequence):
-    pass
-
-scenarios[Galera]=[]
-
-class GaleraNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
+class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
     def __init__(self, environment, verbose=False):
         RATesterScenarioComponent.__init__(self, environment, verbose)
 
-    def IsApplicable(self):
-        return not self.Env.has_key("keep_cluster")
-
     def setup_scenario(self, cluster_manager):
+        if self.Env.has_key("keep_cluster"):
+            self.setup_keep_cluster(cluster_manager)
+        else:
+            self.setup_new_cluster(cluster_manager)
+
+    def teardown_scenario(self, cluster_manager):
+        if self.Env.has_key("keep_cluster"):
+            self.teardown_keep_cluster(cluster_manager)
+        else:
+            self.teardown_new_cluster(cluster_manager)
+
+    def setup_new_cluster(self, cluster_manager):
         # pre-requisites
         prerequisite = ["/usr/bin/gdb", "/usr/bin/screen", "/usr/bin/dig"]
         missing_reqs = False
@@ -146,20 +150,10 @@ class GaleraNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
-    def teardown_scenario(self, cluster_manager):
+    def teardown_new_cluster(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")
 
-scenarios[Galera].append(GaleraNewCluster)
-
-
-class GaleraKeepCluster(RATesterScenarioComponent):
-    def __init__(self, environment, verbose=False):
-        RATesterScenarioComponent.__init__(self, environment, verbose)
-
-    def IsApplicable(self):
-        return self.Env.has_key("keep_cluster")
-
-    def setup_scenario(self, cluster_manager):
+    def setup_keep_cluster(self, cluster_manager):
         cluster_manager.log("Reusing cluster")
 
         # Disable STONITH by default. A dedicated ScenarioComponent
@@ -190,7 +184,31 @@ class GaleraKeepCluster(RATesterScenarioComponent):
             self.rsh(target, "pcs resource manage galera")
             self.rsh(target, "pcs resource delete galera --wait")
 
-    def teardown_scenario(self, cluster_manager):
+    def teardown_keep_cluster(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")
 
-scenarios[Galera].append(GaleraKeepCluster)
+
+# The scenario below set up various configuration of the galera tests
+
+class SimpleSetup(GaleraPrepareCluster):
+
+    def setup_scenario(self, cm):
+        GaleraPrepareCluster.setup_scenario(self,cm)
+        self.Env["galera_gcomm"]=",".join(self.Env["nodes"])
+        self.Env["galera_opts"]=""
+
+scenarios["SimpleSetup"]=[SimpleSetup]
+
+class HostMapSetup(GaleraPrepareCluster):
+
+    def setup_scenario(self, cm):
+        GaleraPrepareCluster.setup_scenario(self,cm)
+        target=self.Env["nodes"][0]
+        pcmk_nodes=self.Env["nodes"]
+        nodes_ip=[self.rsh(target,"getent ahostsv4 %s | grep STREAM | cut -d' ' -f1"%n,
+                           stdout=1).strip() for n in pcmk_nodes]
+        pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,nodes_ip)])
+        self.Env["galera_gcomm"]=",".join(nodes_ip)
+        self.Env["galera_opts"]="pcmk_host_map='%s'"%pcmk_host_map
+
+scenarios["HostMapSetup"]=[HostMapSetup]

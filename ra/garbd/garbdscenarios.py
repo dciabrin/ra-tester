@@ -45,19 +45,26 @@ from ra.galera.galerascenarios import GaleraSetupMixin
 
 scenarios = {}
 
-class GarbdRemote(Sequence):
-    pass
-
-scenarios[GarbdRemote]=[]
-
-class GarbdRemoteNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
+class GarbdRemoteSetup(RATesterScenarioComponent, GaleraSetupMixin):
     def __init__(self, environment, verbose=False):
         RATesterScenarioComponent.__init__(self, environment, verbose)
 
-    def IsApplicable(self):
-        return not self.Env.has_key("keep_cluster")
+    # def IsApplicable(self):
+    #     return not self.Env.has_key("keep_cluster")
 
     def setup_scenario(self, cluster_manager):
+        if self.Env.has_key("keep_cluster"):
+            self.setup_keep_cluster(cluster_manager)
+        else:
+            self.setup_new_cluster(cluster_manager)
+
+    def teardown_scenario(self, cluster_manager):
+        if self.Env.has_key("keep_cluster"):
+            self.teardown_keep_cluster(cluster_manager)
+        else:
+            self.teardown_new_cluster(cluster_manager)
+
+    def setup_new_cluster(self, cluster_manager):
         # mysql setup
         self.init_and_setup_mysql_defaults()
         self.setup_galera_config()
@@ -118,20 +125,10 @@ class GarbdRemoteNewCluster(RATesterScenarioComponent, GaleraSetupMixin):
         res=self.rsh_check(self.Env["arb"], "test -x /usr/sbin/setenforce && setenforce 0 || true")
 
 
-    def TearDown(self, cluster_manager):
+    def teardown_new_cluster(self, cluster_manager):
         cluster_manager.log("Leaving Cluster running on all nodes")
 
-scenarios[GarbdRemote].append(GarbdRemoteNewCluster)
-
-
-class GarbdRemoteKeepCluster(RATesterScenarioComponent):
-    def __init__(self, environment, verbose=False):
-        RATesterScenarioComponent.__init__(self, environment, verbose)
-
-    def IsApplicable(self):
-        return self.Env.has_key("keep_cluster")
-
-    def setup_scenario(self, cluster_manager):
+    def setup_keep_cluster(self, cluster_manager):
         # consider cluster has 2-nodes + one remote arbitrator
         cluster_manager.log("Reusing cluster")
         target=self.Env["nodes"][0]
@@ -174,7 +171,7 @@ class GarbdRemoteKeepCluster(RATesterScenarioComponent):
             self.rsh(target, "pcs resource manage galera")
             self.rsh(target, "pcs resource delete galera --wait")
 
-    def teardown_scenario(self, cluster_manager):
+    def teardown_keep_cluster(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")
 
-scenarios[GarbdRemote].append(GarbdRemoteKeepCluster)
+scenarios["RemoteSetup"]=[GarbdRemoteSetup]
