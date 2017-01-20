@@ -209,6 +209,6 @@ class HostMapSetup(GaleraPrepareCluster):
                            stdout=1).strip() for n in pcmk_nodes]
         pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,nodes_ip)])
         self.Env["galera_gcomm"]=",".join(nodes_ip)
-        self.Env["galera_opts"]="pcmk_host_map='%s'"%pcmk_host_map
+        self.Env["galera_opts"]="cluster_host_map='%s'"%pcmk_host_map
 
 scenarios["HostMapSetup"]=[HostMapSetup]
