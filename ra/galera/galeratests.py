@@ -164,6 +164,27 @@ class ClusterStop(ClusterStart):
 tests.append(ClusterStop)
 
 
+class ClusterInitialBootstrap(ClusterStart):
+    '''Start an entire Galera from empty MySQL data dir'''
+    def __init__(self, cm):
+        GaleraTest.__init__(self,cm)
+        self.name = "ClusterInitialBootstrap"
+
+    def test(self, target):
+
+        for n in self.Env["nodes"]:
+            self.rsh_check(n, "rm -rf /var/lib/mysql; mkdir /var/lib/mysql; chown mysql. /var/lib/mysql; if [ -f `which restorecon >2>/dev/null` ]; then restorecon /var/lib/mysql; else true; fi")
+
+        # bootstrap as usual
+        ClusterStart.test(self, target)
+
+        # ensure all nodes joined the same cluster
+        self.rsh_check(target, "test $(mysql -nNE -e \"show status like 'wsrep_cluster_size';\" | tail -1) = %s"%\
+                       len(self.Env["nodes"]))
+
+tests.append(ClusterInitialBootstrap)
+
+
 class NodeForceStartBootstrap(GaleraTest):
     '''Force-bootstrap Galera on a single node'''
     def __init__(self, cm):
