@@ -192,7 +192,8 @@ if __name__ == '__main__':
                             }
                         tests_filtered=[]
                         for t in available[m][scenario]["tests"]:
-                            if t.name in filtered_modules[m][scenario]:
+                            if t.name in filtered_modules[m][scenario] or \
+                               any([t.name.startswith(x) for x in filtered_modules[m][scenario]]):
                                 tests_filtered.append(t)
                         filtered[m][scenario]["tests"] = tests_filtered
 
