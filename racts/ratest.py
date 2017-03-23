@@ -137,6 +137,15 @@ class ResourceAgentTest(CTSTest):
         # self.rsh_check(target, "screen -S %s -X stuff '%s\r'"%(self.name,command) )
         self.rsh_check(target, "screen -S %s -d -m %s"%(self.name,command) )
 
+    def rsh_until(self, targets, command, timeout=1000, expected = 0):
+        if self.verbose: self.log("> [%s] %s -> UNTIL $? == %d"%(",".join(targets),command, expected))
+        while timeout > 0:
+            for t in targets:
+                res=self.rsh(t, command)
+                if res == expected: return
+            time.sleep(2)
+            timeout-=2
+
     def wait_until_restarted(self, node, timeout=300):
         start=time.time()
         alive = False
