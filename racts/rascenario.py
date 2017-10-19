@@ -51,7 +51,10 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.verbose = verbose
         self.ratemplates = RATemplates()
 
-    def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False):
+    def node_fqdn(self, node):
+        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $3}'"%node, stdout=1).strip()
+
+    def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False, template=False):
         for node in self.Env["nodes"]:
             for localfile,remotefile in files:
                 if create_dir:
@@ -59,14 +62,22 @@ class RATesterScenarioComponent(ScenarioComponent):
                     rc = self.rsh(node, "mkdir -p %s" % remotedir)
                     assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
-                rc = self.rsh.cp(src, "root@%s:%s" % (node, remotefile))
-                assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
-                if owner:
-                    rc = self.rsh(node, "chown %s %s" % (owner, remotefile))
-                    assert rc == 0, "change ownership of \"%s\" on remote node \"%s\"" % (src, node)
-                if perm:
-                    rc = self.rsh(node, "chmod %s %s" % (perm, remotefile))
-                    assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
+                with tempfile.NamedTemporaryFile() as tmp:
+                    if template:
+                        with open(src,"r") as f: template=f.read()
+                        tmp.write(template.replace("{{node}}",self.node_fqdn(node)))
+                        tmp.flush()
+                        cpsrc=tmp.name
+                    else:
+                        cpsrc=src
+                    rc = self.rsh.cp(cpsrc, "root@%s:%s" % (node, remotefile))
+                    assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
+                    if owner:
+                        rc = self.rsh(node, "chown %s %s" % (owner, remotefile))
+                        assert rc == 0, "change ownership of \"%s\" on remote node \"%s\"" % (src, node)
+                    if perm:
+                        rc = self.rsh(node, "chmod %s %s" % (perm, remotefile))
+                        assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
 
     def get_candidate_path(self, candidates, is_dir=False):
         testopt = "-f" if is_dir is False else "-d"
