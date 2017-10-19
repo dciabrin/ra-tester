@@ -30,7 +30,8 @@ import sys, signal, time, os, re, string, subprocess, tempfile
 from subprocess import Popen,PIPE
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 from cts.watcher   import LogWatcher
-
+from cts.environment import Environment
+from cts.CTS import NodeStatus
 
 def ratester___get_lines(self, timeout):
     count=0
@@ -86,6 +87,19 @@ def ratester___call__(self, node, command, stdout=0, synchronous=1, silent=False
         return self.orig___call__(node, command, stdout, synchronous,
                                   silent, blocking, completionDelegate)
 
+def ratester_environment__setitem__(self, key, value):
+    if key == "nodes":
+        self.Nodes = []
+        for node in value:
+            self.Nodes.append(node.strip())
+        self.filter_nodes()
+    else:
+        self.orig___setitem__(key, value)
+
+def ratester_is_node_booted(self, node):
+    '''Return TRUE if the given node is booted (responds to pings)'''
+    return RemoteFactory().getInstance()(node, "/bin/true", silent=True) == 0
+
 def monkey_patch_cts_log_watcher():
     # continue watching when a node gets unresponsive (fencing)
     LogWatcher._LogWatcher__get_lines = ratester___get_lines
@@ -98,3 +112,10 @@ def monkey_patch_cts_remote_commands():
     RemoteExec.ensure_control_master = ratester_ensure_control_master
     RemoteExec.__call__ = ratester___call__
     RemoteExec.call_async = ratester_call_async
+
+def monkey_patch_cts_env_node_setup():
+    Environment.orig___setitem__ = Environment.__setitem__
+    Environment.__setitem__ = ratester_environment__setitem__
+
+def monkey_patch_node_state():
+    NodeStatus.IsNodeBooted = ratester_is_node_booted

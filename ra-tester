@@ -30,6 +30,7 @@ Licensed under the GNU GPL.
 
 
 import sys, signal, time, os, re, string, subprocess, tempfile
+import argparse
 
 from cts.CTS import CtsLab
 from cts.CM_ais import crm_mcp
@@ -40,7 +41,7 @@ from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
 from racts.rafencing import RATesterDefaultFencing
 from racts.raaudit import RATesterAuditList
-from racts.raremotewatch import *
+from racts.ctsoverride import *
 
 
 # These are globals so they can be used by the signal handler.
@@ -112,13 +113,27 @@ def prepare_cts():
     monkey_patch_cts_log_watcher()
     # prevent deadlock with SSH + control master
     monkey_patch_cts_remote_commands()
+    # prevent hostname checks at setup time, so we can use a custom
+    # ssh config file to connect to the nodes
+    monkey_patch_cts_env_node_setup()
+    monkey_patch_node_state()
 
+def parse_and_strip_ratester_args(sysargs):
+    parser=argparse.ArgumentParser("ratester specific arguments")
+    parser.add_argument('--ssh', help='ssh config file that to connect to nodes')
+    args, unknownargs = parser.parse_known_args()
+    if args.ssh != None:
+        rsh=RemoteFactory.rsh
+        file_flag = " -F %s"%args.ssh
+        rsh.Command += file_flag
+        rsh.CpCommand += file_flag
+    return unknownargs
 
 if __name__ == '__main__':
     # TODO: get rid of those temporary hooks in CTS
     prepare_cts()
-
-    env = CtsLab(["--stonith","no"]+sys.argv[1:])
+    cts_args = parse_and_strip_ratester_args(sys.argv[1:])
+    env = CtsLab(["--stonith","no"]+cts_args)
     cluster_manager = crm_mcp(env)
     log=LogFactory()
     log.add_stderr()
