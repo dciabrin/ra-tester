@@ -191,6 +191,7 @@ class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
 # The scenario below set up various configuration of the galera tests
 
 class SimpleSetup(GaleraPrepareCluster):
+    '''Simple IPv4 Galera deployment'''
 
     def setup_scenario(self, cm):
         GaleraPrepareCluster.setup_scenario(self,cm)

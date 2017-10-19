@@ -31,6 +31,7 @@ Licensed under the GNU GPL.
 
 import sys, signal, time, os, re, string, subprocess, tempfile
 import argparse
+import inspect
 
 from cts.CTS import CtsLab
 from cts.CM_ais import crm_mcp
@@ -251,7 +252,7 @@ if __name__ == '__main__':
                 desc['tests'] *= num_iter
             num_tests = len(desc['tests'])
             log.log(">>>>>>>>>>>>>>>> Starting scenario %s:%s (%d tests)"%(m, s, num_tests))
-            log.log("Documentation:          %s" % desc['scenario'].__doc__)
+            log.log("Documentation:          %s" % inspect.getdoc(desc['components'][0]))
             log.log("CTS Master:             %s" % env["cts-master"])
             log.log("CTS Logfile:            %s" % env["OutputFile"])
             log.log("Random Seed:            %s" % env["RandSeed"])
