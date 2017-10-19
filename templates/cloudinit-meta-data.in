@@ -6,6 +6,6 @@ network-interfaces: |
   auto eth1
   iface eth1 inet static
   address ${CLUSTERIP}
-  network 160.0.0.0
-  netmask 255.0.0.0
+  network ${CLUSTERNWGW}
+  netmask ${CLUSTERNWMASK}
 local-hostname: ${DOMNAME}

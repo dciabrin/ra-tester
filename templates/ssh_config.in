@@ -1,3 +1,5 @@
+IdentitiesOnly yes
+
 Host ${VMPREFIXNAME}*
      User root
      IdentityFile ${LOGINKEYNAME}
