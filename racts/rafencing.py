@@ -43,6 +43,9 @@ from cts.environment import EnvFactory
 from racts.rascenario import RATesterScenarioComponent
 
 class RATesterFencingComponent(RATesterScenarioComponent):
+    def get_user_name(self):
+        return os.environ.get("USERNAME",os.environ.get("USER"))
+        
     def __init__(self, env, verbose=False):
         RATesterScenarioComponent.__init__(self, env, verbose)
         # we re-use the CTS' stonith-* params as configuration
@@ -51,7 +54,7 @@ class RATesterFencingComponent(RATesterScenarioComponent):
             self.Env["stonith-params"] = ""
         elif self.Env["stonith-type"] == "external/ssh":
             self.Env["stonith-type"] = "fence_virsh"
-            self.Env["stonith-params"] = "ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key "%os.environ["USERNAME"]
+            self.Env["stonith-params"] = "ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key "%self.get_user_name()
 
     def IsApplicable(self):
         return self.Env["stonith"] == True
