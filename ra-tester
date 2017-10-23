@@ -120,9 +120,12 @@ def prepare_cts():
     monkey_patch_node_state()
 
 def parse_and_strip_ratester_args(sysargs):
-    parser=argparse.ArgumentParser("ratester specific arguments")
+    parser=argparse.ArgumentParser(sys.argv[0], add_help=False)
     parser.add_argument('--ssh', help='ssh config file that to connect to nodes')
     args, unknownargs = parser.parse_known_args()
+    if any(x in unknownargs for x in ("-h", "--help")):
+        parser.print_help()
+        print
     if args.ssh != None:
         rsh=RemoteFactory.rsh
         file_flag = " -F %s"%args.ssh
