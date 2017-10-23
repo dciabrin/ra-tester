@@ -20,7 +20,11 @@ it's as simple as:
 On the cluster machine, you will need various packages for the tests
 to run correctly:
 
-    yum install -y gdb screen
+    yum install -y gdb screen docker
+
+You can let ra-tester build test VM for you with all dependencies
+preinstalled.
+
 
 ## Hardware requirements
 
@@ -69,7 +73,7 @@ Run the whole series of tests with:
 Shoot specific tests and raise `ra-tester` verbosity to see the
 cluster commands ran during the test with:
 
-    ./ra-tester --nodes 'node1 node2 node3' --choose Galera:ClusterStart,Galera:ClusterStop --set verbose=1
+    ./ra-tester --nodes 'node1 node2 node3' --choose Galera:SimpleSetup:ClusterStart,Galera:SimpleSetup:ClusterStop --set verbose=1
 
 Keep existing pacemaker cluster when shooting tests:
 
