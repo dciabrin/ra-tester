@@ -54,9 +54,12 @@ class GaleraSetupMixin(object):
         for node in self.Env["nodes"]:
             rc = self.rsh(node,
                           "if [ ! -d /var/lib/mysql ]; then "
-                          "mkdir /var/lib/mysql &&"
-                          "chown mysql. /var/lib/mysql; fi")
+                          "mkdir /var/lib/mysql; fi")
             assert rc == 0, "could not create dir on remote node %s" % node
+            rc = self.rsh(node,
+                          "chown -R %s:%s /var/lib/mysql"%\
+                          (self.Env["galera_user"],self.Env["galera_user"]) )
+            assert rc == 0, "could not set permission of galera directory remote node %s" % node
             etc_dir = self.mysql_etc_dir()
             rc = self.rsh(node,
                           "if ! `my_print_defaults --mysqld | grep -q socket`; then "
@@ -72,12 +75,13 @@ class GaleraSetupMixin(object):
                                                  "/usr/lib/galera/libgalera_smm.so",
                                                  "/usr/lib64/galera-3/libgalera_smm.so"])
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
-            tmp.write(template.replace("{{nodes}}",",".join(self.Env["nodes"]))\
-                              .replace("{{libpath}}",targetlib) )
+            nodes_fqdn=[self.node_fqdn(x) for x in self.Env["nodes"]]
+            tmp.write(template.replace("{{nodes}}",",".join(nodes_fqdn))\
+                              .replace("{{libpath}}",targetlib))
             tmp.flush()
             target_dir = self.mysql_etc_dir()
             galera_config_files = [(tmp.name,os.path.join(target_dir,"galera.cnf"))]
-            self.copy_to_nodes(galera_config_files)
+            self.copy_to_nodes(galera_config_files,template=True)
 
 
 scenarios = {}
@@ -98,9 +102,16 @@ class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
         else:
             self.teardown_new_cluster(cluster_manager)
 
-    def setup_new_cluster(self, cluster_manager):
-        # pre-requisites
-        prerequisite = ["/usr/bin/gdb", "/usr/bin/screen", "/usr/bin/dig"]
+
+    def pull_galera_container_image(self):
+        for node in self.Env["nodes"]:
+            self.log("pulling galera container image on %s"%node)
+            rc = self.rsh(node, "docker pull docker.io/tripleoupstream/centos-binary-mariadb:latest")
+            assert rc == 0, \
+                "failed to pull galera container image on remote node \"%s\"" % \
+                (node,)
+
+    def check_prerequisite(self, prerequisite):
         missing_reqs = False
         for req in prerequisite:
             if not self.rsh.exists_on_all(req, self.Env["nodes"]):
@@ -108,6 +119,12 @@ class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
                          "Please install the necessary package to run the tests"%  req)
                 missing_reqs = True
         assert not missing_reqs
+
+    def setup_new_cluster(self, cluster_manager):
+        # pre-requisites
+        self.check_prerequisite(["/usr/bin/gdb", "/usr/bin/screen", "/usr/bin/dig"])
+        if self.Env["galera_bundle"]:
+            self.check_prerequisite(["/usr/bin/docker"])
 
         # galera-specific data
         test_scripts = ["kill-during-txn.gdb", "slow_down_sst.sh"]
@@ -118,6 +135,12 @@ class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
                 assert rc == 0, \
                     "failed to copy data \"%s\" on remote node \"%s\"" % \
                     (src, node)
+
+        # container setup
+        if self.Env["galera_bundle"]:
+            self.rsh(node, "systemctl enable docker")
+            self.rsh(node, "systemctl start docker")
+            self.pull_galera_container_image()
 
         # mysql setup
         self.init_and_setup_mysql_defaults()
@@ -191,25 +214,45 @@ class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
 # The scenario below set up various configuration of the galera tests
 
 class SimpleSetup(GaleraPrepareCluster):
-    '''Simple IPv4 Galera deployment'''
 
     def setup_scenario(self, cm):
-        GaleraPrepareCluster.setup_scenario(self,cm)
         self.Env["galera_gcomm"]=",".join(self.Env["nodes"])
-        self.Env["galera_opts"]=""
+        self.Env["galera_rsc_name"] = "galera-master"
+        self.Env["galera_opts"] = ""
+        self.Env["galera_user"] = "mysql"
+        self.Env["galera_meta"] = "master-max=3 --master"
+        GaleraPrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]
 
 class HostMapSetup(GaleraPrepareCluster):
 
     def setup_scenario(self, cm):
-        GaleraPrepareCluster.setup_scenario(self,cm)
         target=self.Env["nodes"][0]
         pcmk_nodes=self.Env["nodes"]
         nodes_ip=[self.rsh(target,"getent ahostsv4 %s | grep STREAM | cut -d' ' -f1"%n,
                            stdout=1).strip() for n in pcmk_nodes]
         pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,nodes_ip)])
         self.Env["galera_gcomm"]=",".join(nodes_ip)
-        self.Env["galera_opts"]="cluster_host_map='%s'"%pcmk_host_map
+        self.Env["galera_opts"] = "cluster_host_map='%s'"%pcmk_host_map
+        self.Env["galera_rsc_name"] = "galera-master"
+        self.Env["galera_user"] = "mysql"
+        self.Env["galera_meta"] = "master-max=3 --master"
+        GaleraPrepareCluster.setup_scenario(self,cm)
 
 scenarios["HostMapSetup"]=[HostMapSetup]
+
+class KollaSetup(GaleraPrepareCluster):
+
+    def setup_scenario(self, cm):
+        target=self.Env["nodes"][0]
+        pcmk_nodes=self.Env["nodes"]
+        pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,pcmk_nodes)])
+        self.Env["galera_gcomm"] = ",".join(pcmk_nodes)
+        self.Env["galera_opts"] = "cluster_host_map='%s'"%pcmk_host_map
+        self.Env["galera_rsc_name"] = "galera-bundle"
+        self.Env["galera_meta"] = "container-attribute-target=host bundle galera-bundle"
+        self.Env["galera_bundle"] = True
+        self.Env["galera_user"] = "42434" # mysql uid in kolla image
+        GaleraPrepareCluster.setup_scenario(self,cm)
+scenarios["KollaSetup"]=[KollaSetup]

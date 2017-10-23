@@ -117,10 +117,12 @@ class SSTFailureTest(SSTTest):
         # start all nodes we don't care about, so we're sure
         # we only mess with our target
         ClusterStart.test(self, target)
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", target, 'ok')]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera",
+                                           "galera-bundle-[0-9]" if self.Env["galera_bundle"] else target,
+                                           'ok')]
+        watch = self.create_watch(patterns, 10) # self.Env["DeadTime"])
         watch.setwatch()
-        self.rsh_check(target, "pcs resource ban %s %s"%("galera", target))
+        self.rsh_check(target, "pcs resource ban %s %s"%(self.Env["galera_rsc_name"], target))
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
@@ -128,26 +130,39 @@ class SSTFailureTest(SSTTest):
         self.setup_slow_sst(target)
 
         # Wait for generic break action to break the target
+        fail_target="galera-bundle-[0-9]" if self.Env["galera_bundle"] else target
+        # long-running sst requires op = "monitor"
+        op = "promote"
         patterns = [r"pengine.*:\s+warning:.*Processing failed op %s for %s(:[0-9]*)? on %s: %s"%\
-                    ("monitor", "galera", target, 'not running')
+                    (op, "galera", fail_target, '(not running|unknown error)')
         ]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
-        self.rsh_check(target, "pcs resource clear %s %s"%("galera", target))
+        self.rsh_check(target, "pcs resource clear %s %s"%(self.Env["galera_rsc_name"], target))
         self.break_action(target)
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
+        if self.Env["galera_bundle"]:
+            # extract the exact bundle clone where the resource ran
+            fail_target = re.sub(r'^.*\W(galera-bundle-[0-9])\W.*$',r'\1',
+                                 watch.matched[0].rstrip('\n'))
 
         # the target resource should be in failed state, and also blocked from restarting
-        self.rsh_check(target, "pcs resource failcount show %s %s | grep %s:"%("galera", target, target))
-        self.rsh_check(target, "pcs status | grep %s | grep 'FAILED %s' | grep blocked"%("galera", target))
+        self.rsh_check(target, "pcs resource failcount show %s %s | grep %s:"%("galera", fail_target, fail_target))
+        # note: bundles have the same output in pcs status than regular resource
+        self.rsh_check(target, "pcs status | grep %s | grep 'FAILED\W.*\W%s' | grep blocked"%("galera", target))
 
         # the sync flag should still be set in the CIB for the failed target
-        self.crm_attr_check(target, "galera-sync-needed")
+        # only with the long-running sst patch
+        # self.crm_attr_check(target, "galera-sync-needed")
 
         # Donor will fail the SST transfer on its side and go back to SYNC state
         # transparently, i.e. no failure
-        for node in [x for x in self.Env["nodes"] if x != target]:
+        target_nodes=self.Env["nodes"]
+        ## bundles run resources on container nodes, not host nodes
+        if self.Env["galera_bundle"]:
+            target_nodes=["galera-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
+        for node in [x for x in target_nodes if x != fail_target]:
             self.rsh_check(target, "pcs resource failcount show galera %s | grep 'No failcount'"%(node))
 
     def teardown_test(self, target):
@@ -156,13 +171,15 @@ class SSTFailureTest(SSTTest):
         target = self.Env["nodes"][1]
         self.crm_attr_del(target, "galera-no-grastate")
         self.crm_attr_del(target, "galera-sync-needed")
-
+        # long running sst doesn't need that
+        self.crm_attr_del(target, "master-galera")
         SSTTest.teardown_test(self, target)
 
     def errorstoignore(self):
         return GaleraTest.errorstoignore(self) + \
                GaleraTest.errors_after_forced_stop(self) + \
-               [r"%s.*rsyncd.*rsync error: error in rsync protocol data stream"%self.target]
+               [r"%s.*rsyncd.*rsync error: error in rsync protocol data stream"%self.target,
+                r"MySQL server failed to start.*please check your installation"]
 
 
 class SSTFailureNoScriptOnJoinerNode(SSTTest):
@@ -175,6 +192,7 @@ class SSTFailureNoScriptOnJoinerNode(SSTTest):
     def __init__(self, cm):
         GaleraTest.__init__(self,cm)
         self.name = "SSTFailureNoScriptOnJoinerNode"
+        self.bundle_map_sst_script = True
 
     def is_applicable(self):
         return True
@@ -187,10 +205,12 @@ class SSTFailureNoScriptOnJoinerNode(SSTTest):
         # we only mess with our target
         ClusterStart.test(self, target)
 
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", target, 'ok')]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera",
+                                           "galera-bundle-[0-9]" if self.Env["galera_bundle"] else target,
+                                           'ok')]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
-        self.rsh_check(target, "pcs resource ban %s %s"%("galera", target))
+        self.rsh_check(target, "pcs resource ban %s %s"%(self.Env["galera_rsc_name"], target))
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
@@ -199,32 +219,51 @@ class SSTFailureNoScriptOnJoinerNode(SSTTest):
         self.prepare_node_for_sst(target)
 
         # start joiner and wait for it to fail in SST
+        fail_target="galera-bundle-[0-9]" if self.Env["galera_bundle"] else target
+        # long-running sst requires op = "monitor"
+        op = "promote"
         patterns = [r"pengine.*:\s+warning:.*Processing failed op %s for %s(:[0-9]*)? on %s: %s"%\
-                    ("monitor", "galera", target, 'not running')
+                    (op, "galera", fail_target, '(not running|unknown error)')
                     ]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
-        self.rsh_check(target, "pcs resource clear %s %s"%("galera", target))
+        self.rsh_check(target, "pcs resource clear %s %s"%(self.Env["galera_rsc_name"], target))
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
+        if self.Env["galera_bundle"]:
+            # extract the exact bundle clone where the resource ran
+            fail_target = re.sub(r'^.*\W(galera-bundle-[0-9])\W.*$',r'\1',
+                                 watch.matched[0].rstrip('\n'))
 
-        # the resource should be in failed state, and also blocked from restarting
-        self.rsh_check(target, "pcs resource failcount show %s %s | grep %s:"%("galera", target, target))
-        self.rsh_check(target, "pcs status | grep %s | grep 'FAILED %s' | grep blocked"%("galera", target))
+        # The resource should be in failed state, and also blocked from restarting
+        self.rsh_check(target, "pcs resource failcount show %s %s | grep %s:"%("galera", fail_target, fail_target))
+        # note: bundles have the same output in pcs status than regular resource
+        self.rsh_check(target, "pcs status | grep %s | grep 'FAILED\W.*\W%s' | grep blocked"%("galera", target))
 
         # the sync flag should still be set in the CIB for the failed target
-        self.crm_attr_check(target, "galera-sync-needed")
+        # only with the long-running sst patch
+        # self.crm_attr_check(target, "galera-sync-needed")
 
         # Donor should not have received the SST request, and thus
         # should not be impacted
-        for node in [x for x in self.Env["nodes"] if x != target]:
+        target_nodes=self.Env["nodes"]
+        ## bundles run resources on container nodes, not host nodes
+        if self.Env["galera_bundle"]:
+            target_nodes=["galera-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
+        for node in [x for x in target_nodes if x != fail_target]:
             self.rsh_check(target, "pcs resource failcount show galera %s | grep 'No failcount'"%(node))
 
     def teardown_test(self, target):
         self.restore_sst_script(target)
         self.crm_attr_del(target, "galera-no-grastate")
         self.crm_attr_del(target, "galera-sync-needed")
+        # long running sst doesn't need that
+        self.crm_attr_del(target, "master-galera")
         ClusterStart.teardown_test(self, target)
+
+    def errorstoignore(self):
+        return GaleraTest.errorstoignore(self) + \
+            [r"MySQL server failed to start.*please check your installation"]
 
 tests.append(SSTFailureNoScriptOnJoinerNode)
 
@@ -238,6 +277,7 @@ class SSTFailureNoScriptOnDonorNode(SSTFailureNoScriptOnJoinerNode):
 
     def __init__(self, cm):
         GaleraTest.__init__(self,cm)
+        self.bundle_map_sst_script = True
         self.name = "SSTFailureNoScriptOnDonorNode"
 
     def is_applicable(self):
@@ -297,6 +337,10 @@ class SSTFailureRSyncdKilledOnJoinerNode(SSTTest):
     def break_action(self, target):
         self.rsh_until([target], "killall -9 rsync")
 
+    def errorstoignore(self):
+        return GaleraTest.errorstoignore(self) + \
+            [r"MySQL server failed to start.*please check your installation"]
+
 tests.append(SSTFailureRSyncdKilledOnJoinerNode)
 
 
@@ -316,6 +360,10 @@ class SSTFailureSSTScriptKilledOnJoinerNode(SSTTest):
 
     def break_action(self, target):
         self.rsh_until([target], "killall -ILL wsrep_sst_rsync")
+
+    def errorstoignore(self):
+        return GaleraTest.errorstoignore(self) + \
+            [r"MySQL server failed to start.*please check your installation"]
 
 tests.append(SSTFailureSSTScriptKilledOnJoinerNode)
 

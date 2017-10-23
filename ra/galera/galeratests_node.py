@@ -56,21 +56,34 @@ class NodeForceStartBootstrap(GaleraTest):
         self.name = "NodeForceStartBootstrap"
 
     def test(self, node):
-        '''Ban all nodes except one, to block promotion to master, and force promote manually on one node.'''
+        '''Ban all nodes except one, to block promotion to master, and force promote manually on one node.
+              . start the resource so that it stays in slave state (because some nodes are baned)
+              . unmanage the resource to set it out of pacemaker control
+              . manually trigger a promotion operation'''
         target = node
         unwanted_nodes = [x for x in self.Env["nodes"] if x != target]
 
         # ban unwanted nodes, so that pacemaker won't try to start resource on them
         for n in unwanted_nodes:
-            self.rsh_check(n, "pcs resource ban galera-master %s"%n)
+            self.rsh_check(n, "pcs resource ban %s %s"%(self.Env["galera_rsc_name"], n))
+
+        # note: this is also needed for bundles because we want the
+        # docker resource and the pacemaker remote resource to be
+        # started
+
+        target_nodes=self.Env["nodes"]
+        ## bundles run resources on container nodes, not host nodes
+        if self.Env["galera_bundle"]:
+            target_nodes=["galera-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", "galera", n, 'ok') \
+                    for n in target_nodes]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        self.rsh_check(target, "pcs resource enable %s"%self.Env["galera_rsc_name"])
+        watch.look()
 
         # set galera management away of pacemaker's control
         self.rsh_check(target, "pcs resource unmanage galera")
-
-        # due to how we created the resource, we must reset
-        # target-role to master, to prevent pacemaker to demote
-        # after manual override
-        self.rsh_check(target, "pcs resource enable galera-master")
 
         # force status of target node to "bootstrap" and promote it
         # note: in the current RA, once a node is promoted, it forces
@@ -78,18 +91,30 @@ class NodeForceStartBootstrap(GaleraTest):
         # that sets phantom attributes "master-galera:0" in the CIB
         self.crm_attr_set(target, "galera-bootstrap", "true")
         self.crm_attr_set(target, "master-galera", "100")
-        self.rsh_check(target, "crm_resource --force-promote -r galera")
+        promotecmd="crm_resource --force-promote -r galera"
+        if self.Env["galera_bundle"]:
+            promotecmd="docker exec $(docker ps -f name=galera-bundle -q) /bin/bash -c 'OCF_RESKEY_CRM_meta_container_attribute_target=host OCF_RESKEY_CRM_meta_physical_host=%s %s'"%(target,promotecmd)
+        self.rsh_check(target, promotecmd)
 
         # remove unwanted "master-galera:0" attributes
         for n in self.Env["nodes"]:
             self.rsh_check(n, "crm_attribute -N %s -l reboot --name master-galera:0 -D"%n)
 
+        # time.sleep(30);
+
         # instruct pacemaker to re-probe the state of the galera resource
-        pattern = self.ratemplates.build("Pat:RscRemoteOp", "probe", "galera", target, 'master')
+        if self.Env["galera_bundle"]:
+            # bundles run resource on container node, which may have a
+            # name depending on resource allocation, so be generic
+            # TODO use real bundle target
+            probe_target = '.*'
+        else:
+            probe_target = target
+        pattern = self.ratemplates.build("Pat:RscRemoteOp", "probe", "galera", probe_target, 'master')
         watch = self.create_watch([pattern], self.Env["DeadTime"])
 
         watch.setwatch()
-        self.rsh_check(target, "pcs resource cleanup galera")
+        self.rsh_check(target, "pcs resource cleanup %s"%self.Env["galera_rsc_name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
@@ -100,10 +125,10 @@ class NodeForceStartBootstrap(GaleraTest):
         self.crm_attr_check(target, "galera-bootstrap", expected = 6)
 
         # a bootstrap node never requires sync-ing
-        self.crm_attr_check(target, "galera-sync-needed", expected = 6)
+        self.crm_attr_check(target, "sync-needed", expected = 6)
 
         # once a node is running, boot status should be cleared
-        self.crm_attr_check(target, "galera-no-grastate", expected = 6)
+        self.crm_attr_check(target, "no-grastate", expected = 6)
 
 tests.append(NodeForceStartBootstrap)
 
@@ -121,7 +146,10 @@ class NodeForceStartJoining(ClusterStart):
 
         # stop a node so that pacemaker restart it from the "start" op
         # note: by test "ClusterStop", we know sync-needed is unset
-        self.rsh_check(node, "crm_resource --force-stop -r galera")
+        stopcmd="crm_resource --force-stop -r galera"
+        if self.Env["galera_bundle"]:
+            stopcmd="docker exec $(docker ps -f name=galera-bundle -q) /bin/bash -c 'OCF_RESKEY_CRM_meta_container_attribute_target=host OCF_RESKEY_CRM_meta_physical_host=%s %s'"%(node,stopcmd)
+        self.rsh_check(node, stopcmd)
 
         # the "start" op only tags this node as a joining node.
         # the galera server is started during the "monitor" op (1) and
@@ -130,7 +158,14 @@ class NodeForceStartJoining(ClusterStart):
 
         # we want to track (1) and (2).
         # TODO: double check (1) and (2) with attribute "sync-needed"
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", node, 'ok')]
+        if self.Env["galera_bundle"]:
+            # bundles run resource on container node, which may have a
+            # name depending on resource allocation, so be generic
+            # TODO use real bundle target
+            probe_target = '.*'
+        else:
+            probe_target = node
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", probe_target, 'ok')]
         # newer version of the RA
         # patterns = [r"INFO: Node <%s> is joining the cluster"%(node,),
         #             r"INFO: local node synced with the cluster"]
@@ -159,6 +194,30 @@ class NodeCheckDemoteCleanUp(GaleraTest):
         self.name = "NodeCheckDemoteCleanUp"
 
     def test(self, node):
+        # note: for bundle we need to start the galera resource up to
+        # 'Slave' resource, for the container resource to be started
+        target = node
+        unwanted_nodes = [x for x in self.Env["nodes"] if x != target]
+
+        # ban unwanted nodes, so that pacemaker won't try to start resource on them
+        for n in unwanted_nodes:
+            self.rsh_check(n, "pcs resource ban %s %s"%(self.Env["galera_rsc_name"], n))
+
+        # note: this is also needed for bundles because we want the
+        # docker resource and the pacemaker remote resource to be
+        # started
+
+        target_nodes=self.Env["nodes"]
+        ## bundles run resources on container nodes, not host nodes
+        if self.Env["galera_bundle"]:
+            target_nodes=["galera-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", "galera", n, 'ok') \
+                    for n in target_nodes]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        self.rsh_check(target, "pcs resource enable %s"%self.Env["galera_rsc_name"])
+        watch.look()
+
         # set galera management away of pacemaker's control.
         # note: resource is stopped, so pacemaker will also disable
         # regular monitoring that could mess with the test
@@ -167,14 +226,20 @@ class NodeCheckDemoteCleanUp(GaleraTest):
         # first promote the node
         self.crm_attr_set(node, "galera-bootstrap", "true")
         self.crm_attr_set(node, "master-galera", "100")
-        self.rsh_check(node, "crm_resource --force-promote -r galera")
+        promotecmd="crm_resource --force-promote -r galera"
+        if self.Env["galera_bundle"]:
+            promotecmd="docker exec $(docker ps -f name=galera-bundle -q) /bin/bash -c 'OCF_RESKEY_CRM_meta_container_attribute_target=host OCF_RESKEY_CRM_meta_physical_host=%s %s'"%(node,promotecmd)
+        self.rsh_check(node, promotecmd)
 
         # remove unwanted "master-galera:0" attributes
         for n in self.Env["nodes"]:
             self.rsh_check(n, "crm_attribute -N %s -l reboot --name master-galera:0 -D"%n)
 
         # ensure things are cleaned up after a demote
-        self.rsh_check(node, "crm_resource --force-demote -r galera")
+        demotecmd="crm_resource --force-demote -r galera"
+        if self.Env["galera_bundle"]:
+            demotecmd="docker exec $(docker ps -f name=galera-bundle -q) /bin/bash -c 'OCF_RESKEY_CRM_meta_container_attribute_target=host OCF_RESKEY_CRM_meta_physical_host=%s %s'"%(node,demotecmd)
+        self.rsh_check(node, demotecmd)
         self.crm_attr_check(node, "galera-bootstrap", expected = 6)
         self.crm_attr_check(node, "galera-sync-needed", expected = 6)
 
@@ -212,9 +277,13 @@ class NodeRestartOnErrorIfMaster(ClusterStart):
 
         # check whether master stops the resource as expected and
         # does not respawn galera yet
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", target, 'ok'),
-                    r"galera\(%s\).*INFO:\s+Galera started"
-                    ]
+        target_nodes=[target]
+        ## bundles run resources on container nodes, not host nodes
+        if self.Env["galera_bundle"]:
+            target_nodes=["galera-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
+        patterns = [r"galera\(%s\).*INFO:\s+Galera started"]
+        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", t, 'ok')
+                     for t in target_nodes]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(target, "mysqladmin shutdown")
@@ -223,10 +292,11 @@ class NodeRestartOnErrorIfMaster(ClusterStart):
 
         # galera should get respawn during a monitor operation and
         # resource should go to master
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", target, 'ok')]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", "galera", t, 'ok')
+                     for t in target_nodes]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
-        watch.lookforall()
+        watch.look()
         assert not watch.unmatched, watch.unmatched
 
     def errorstoignore(self):
@@ -450,4 +520,3 @@ class NodeSyncFailureEnsureSSTAtNextRestart(ClusterStart):
         ClusterStart.teardown_test(self, target)
 
 tests.append(NodeSyncFailureEnsureSSTAtNextRestart)
-

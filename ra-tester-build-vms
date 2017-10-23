@@ -349,6 +349,7 @@ prepare_base_image()
 
     # galera: mysql-server/galera, galera-replication/debugsymbols, garbd
     virt-customize ${VFLAGS} -a ${VMBASEIMG} \
+                   --install $(distro_pkg docker) \
                    --install $(distro_pkg mariadb-galera) \
                    --install $(distro_pkg galera) \
                    --install $(distro_pkg galera-dbg) \
