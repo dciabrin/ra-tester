@@ -283,9 +283,6 @@ prepare_base_image()
     local inspect=$(virt-inspector -a ${VMBASEIMG})
     DISTRO=$(echo $inspect | virt-inspector --xpath '//operatingsystems/operatingsystem/distro/text()')
     PKG_FORMAT=$(echo $inspect | virt-inspector --xpath '//operatingsystems/operatingsystem/package_format/text()')
-    if [ "$PKG_FORMAT" == "rpm" ]; then
-        VFLAGS="$VFLAGS --selinux-relabel"
-    fi
 
     echo "Preparing temporary base image"
     # startup and access
