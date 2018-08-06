@@ -32,6 +32,7 @@ Licensed under the GNU GPL.
 import sys, signal, time, os, re, string, subprocess, tempfile
 import argparse
 import inspect
+import yaml
 
 from cts.CTS import CtsLab
 from cts.CM_ais import crm_mcp
@@ -122,6 +123,7 @@ def prepare_cts():
 def parse_and_strip_ratester_args(sysargs):
     parser=argparse.ArgumentParser(sys.argv[0], add_help=False)
     parser.add_argument('--ssh', help='ssh config file that to connect to nodes')
+    parser.add_argument('--nodes', help='nodes to use for the tests')
     args, unknownargs = parser.parse_known_args()
     if any(x in unknownargs for x in ("-h", "--help")):
         parser.print_help()
@@ -133,11 +135,76 @@ def parse_and_strip_ratester_args(sysargs):
         rsh.CpCommand += file_flag
     return unknownargs
 
+def parse_cluster_args_and_sanitize_node_args(cts_args):
+    parser=argparse.ArgumentParser(cts_args, add_help=False)
+    parser.add_argument('--nodes', help='ssh config file that to connect to nodes')
+    args, unknownargs = parser.parse_known_args()
+    clusters=None
+    try:
+        clusters=yaml.load(args.nodes)
+        assert isinstance(clusters, list)
+        assert [isinstance(c, list) for c in clusters]
+        assert [[isinstance(n, str) for n in c] for c in clusters]
+    except yaml.parser.ParserError as e:
+        print "cannot parse value for option 'node': %s"%args.nodes
+    except AssertionError as e:
+        print "argument to option 'node' is invalid: %s"%args.nodes
+    if clusters == None:
+        print "expected argument --node '[[name1,name2,...],...]'"
+        sys.exit(0)
+    nodes=" ".join([" ".join(cluster) for cluster in clusters])
+    print clusters
+    print nodes
+    print args
+    sys.exit(0)
+
+def parse_ratester_args(sysargs):
+    ratester_env = {}
+    parser=argparse.ArgumentParser(sys.argv[0], add_help=False)
+    parser.add_argument('--ssh', help='ssh config file that to connect to nodes')
+    parser.add_argument('--nodes', help='nodes to use for the tests')
+    knownargs, unknownargs = parser.parse_known_args()
+    if any(x in unknownargs for x in ("-h", "--help")):
+        parser.print_help()
+        print
+    if '[' in knownargs.nodes:
+        try:
+            clusters=yaml.load(knownargs.nodes)
+            assert isinstance(clusters, list)
+            assert [isinstance(c, list) for c in clusters]
+            assert [[isinstance(n, str) for n in c] for c in clusters]
+        except yaml.parser.ParserError as e:
+            print "cannot parse value for option 'node': %s"%args.nodes
+        except AssertionError as e:
+            print "argument to option 'node' is invalid: %s"%args.nodes
+        if clusters == None:
+            print "expected argument --node '[[name1,name2,...],...]'"
+            sys.exit(0)
+        ratester_env['clusters']=clusters
+        ctsnodes=" ".join([" ".join(cluster) for cluster in clusters])
+    else:
+        ctsnodes=knownargs.nodes
+        ratester_env['clusters']=[ctsnodes.split()]
+    unknownargs = ["--nodes", ctsnodes] + unknownargs
+    if knownargs.ssh:
+        rsh=RemoteFactory.rsh
+        file_flag = " -F %s"%knownargs.ssh
+        rsh.Command += file_flag
+        rsh.CpCommand += file_flag
+
+    return (ratester_env, unknownargs)
+
+def inject_ratester_env(ratester_env,env):
+    env['clusters']=ratester_env['clusters']
+
 if __name__ == '__main__':
     # TODO: get rid of those temporary hooks in CTS
     prepare_cts()
-    cts_args = parse_and_strip_ratester_args(sys.argv[1:])
+    ratester_env, cts_args = parse_ratester_args(sys.argv[1:])
+    print ratester_env
+    print cts_args
     env = CtsLab(["--stonith","no"]+cts_args)
+    inject_ratester_env(ratester_env, env)
     cluster_manager = crm_mcp(env)
     log=LogFactory()
     log.add_stderr()
