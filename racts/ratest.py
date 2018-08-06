@@ -154,3 +154,70 @@ class ResourceAgentTest(CTSTest):
             assert time.time()-start < timeout, "Restart timeout exceeded"
             res = self.rsh(node, "true")
             if res == 0: alive = True
+
+    def resource_name_pattern(self):
+        return re.sub(r'-(master|clone|bundle)','',self.Env["rsc_name"])
+
+    def resource_name_probe_pattern(self):
+        pattern = self.resource_name_pattern()
+        if self.Env["bundle"]: pattern+='-bundle-docker-[0-9]'
+        return pattern
+
+
+    def setup_inactive_resource(self, cluster_nodes):
+        '''Common resource creation for test setup'''
+
+        node = cluster_nodes[0]
+
+        probe_pattern = self.resource_name_probe_pattern()
+        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
+        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe", probe_pattern, n, 'not running') \
+                     for n in self.Env["nodes"]]
+
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+
+        meta = self.Env["meta"] or ""
+
+        # create a bundle that will host the resource
+        if self.Env["bundle"]:
+            bundle_cmd = self.bundle_command() + " --disabled"
+            self.rsh_check(node, bundle_cmd)
+            meta += " bundle %s"%self.Env["rsc_name"]
+
+        # create the resource, set it disabled if it is not
+        # running in a bundle
+        resource_cmd = self.resource_command()
+        if meta != "": resource_cmd += " meta %s"%meta
+        if not self.Env["bundle"]: resource_cmd += " --disabled"
+        self.rsh_check(node, resource_cmd)
+
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+
+    def delete_resource(self, cluster_nodes):
+        # handy debug hook
+        if self.Env.has_key("keep_resources"):
+            return 1
+
+        node = cluster_nodes[0]
+
+        # give back control to pacemaker in case the test disabled it
+        self.rsh_check(node, "pcs resource manage %s"%self.Env["rsc_name"])
+
+        # delete the resource created for this test
+        # note: deleting a resource triggers an implicit stop, and that
+        # implicit delete will fail when ban constraints are set.
+        self.rsh_check(node, "pcs resource delete %s"%self.Env["rsc_name"])
+
+    def errorstoignore(self):
+        return [
+            # docker daemon is quite verbose, but all real errors are reported by pacemaker
+            r"dockerd-current.*:\s*This node is not a swarm manager",
+            r"dockerd-current.*:\s*No such container",
+            r"dockerd-current.*:\s*No such image",
+            r"dockerd-current.*Handler for GET.*/.*returned error: (network|plugin).*not found",
+            r"dockerd-current.*Handler for GET.*/.*returned error: get.*no such volume",
+            # pengine logs spurious error on regular operations
+            r"pengine.*error: Could not fix addr for "
+        ]

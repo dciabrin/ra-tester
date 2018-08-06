@@ -6,7 +6,7 @@ ScenarioComponent utilities and base classes, extends Pacemaker's CTS
  '''
 
 __copyright__ = '''
-Copyright (C) 2015-2016 Damien Ciabrini <dciabrin@redhat.com>
+Copyright (C) 2015-2018 Damien Ciabrini <dciabrin@redhat.com>
 Licensed under the GNU GPL.
 '''
 
@@ -50,11 +50,20 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.Env = environment
         self.verbose = verbose
         self.ratemplates = RATemplates()
+        self.dependencies = []
 
     def node_fqdn(self, node):
-        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $3}'"%node, stdout=1).strip()
+        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $3;exit}'"%node, stdout=1).strip()
 
-    def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False, template=False):
+    def node_shortname(self, node):
+        return self.rsh(node, "hostname", stdout=1).strip()
+
+    def node_ip(self, node):
+        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $1;exit}'"%node, stdout=1).strip()
+
+    def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False, template=False, nodes=False):
+        if nodes == False:
+            nodes = self.Env["nodes"]
         for node in self.Env["nodes"]:
             for localfile,remotefile in files:
                 if create_dir:
@@ -78,6 +87,35 @@ class RATesterScenarioComponent(ScenarioComponent):
                     if perm:
                         rc = self.rsh(node, "chmod %s %s" % (perm, remotefile))
                         assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
+
+    def copy_to_node(self, node, files, create_dir=False, owner=False, perm=False, template=False):
+        for localfile,remotefile in files:
+            if create_dir:
+                remotedir=os.path.dirname(remotefile)
+                rc = self.rsh(node, "mkdir -p %s" % remotedir)
+                assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
+            src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
+            with tempfile.NamedTemporaryFile() as tmp:
+                if template:
+                    with open(src,"r") as f: lines=f.readlines()
+                    for line in lines:
+                        tmpstr = line
+                        for k,v in template.items():
+                            if k in tmpstr:
+                                tmpstr = tmpstr.replace(k,v)
+                        tmp.write(tmpstr)
+                    tmp.flush()
+                    cpsrc=tmp.name
+                else:
+                    cpsrc=src
+                rc = self.rsh.cp(cpsrc, "root@%s:%s" % (node, remotefile))
+                assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
+                if owner:
+                    rc = self.rsh(node, "chown %s %s" % (owner, remotefile))
+                    assert rc == 0, "change ownership of \"%s\" on remote node \"%s\"" % (src, node)
+                if perm:
+                    rc = self.rsh(node, "chmod %s %s" % (perm, remotefile))
+                    assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
 
     def get_candidate_path(self, candidates, is_dir=False):
         testopt = "-f" if is_dir is False else "-d"
@@ -118,3 +156,131 @@ class RATesterScenarioComponent(ScenarioComponent):
         if self.verbose: self.log("> [%s] %s"%(target,command))
         res=self.rsh(target, command+" &>/dev/null")
         assert res == expected, "\"%s\" returned %d"%(command,res)
+
+    def check_package_dependencies(self, target, pkgs):
+        if self.Env.has_key("skip_install_dependencies"): return
+        # make sure a container runtime is available
+        if self.Env.has_key("bundle"):
+            self.dependencies.append('docker')
+        # TODO delegate the install to an implementation class
+        # based on the running distro
+        for p in pkgs:
+            res = self.rsh(target, "rpm -qa --qf '%%{NAME}\n' %s | grep %s"%(p, p))
+            if res != 0:
+                if self.verbose: self.log("[Installing prerequisite %s on %s]"%(p, target))
+                self.rsh_check(target, "yum install -y %s"%p)
+            else:
+                res = self.rsh(target, "repoquery -a --pkgnarrow=updates --qf 'UPDATE' %s | grep UPDATE"%(p,))
+                if res == 0:
+                    if self.verbose: self.log("[Updating prerequisite %s on %s]"%(p, target))
+                    self.rsh_check(target, "yum update -y %s"%p)
+
+    def pull_container_image(self, img):
+        for node in self.Env["nodes"]:
+            self.log("pulling container image %s on %s"%(img,node))
+            rc = self.rsh(node, "docker pull %s"%img)
+            assert rc == 0, \
+                "failed to pull container image on remote node \"%s\"" % \
+                (node,)
+
+    def setup_scenario(self, cluster_manager):
+        # install package pre-requisites
+        for node in self.Env["nodes"]:
+            self.check_package_dependencies(node, self.dependencies)
+
+        # container setup
+        if self.Env.has_key("bundle"):
+            for node in self.Env["nodes"]:
+                self.rsh(node, "systemctl enable docker")
+                self.rsh(node, "systemctl start docker")
+            self.pull_container_image(self.Env["container_image"])
+
+        # setup cluster
+        if self.Env.has_key("keep_cluster"):
+            self.setup_keep_cluster(cluster_manager)
+        else:
+            self.setup_new_cluster(cluster_manager)
+
+
+    def setup_configs(self, cluster_nodes):
+        pass
+
+    def setup_state(self, cluster_nodes):
+        pass
+
+    def setup_new_cluster(self, cluster_manager):
+        # cleanup previous galera state on disk
+        for cluster in self.Env["clusters"]:
+            self.setup_configs(cluster)
+            self.setup_state(cluster)
+
+        # stop cluster if previously running, failure is not fatal
+        for node in self.Env["nodes"]:
+            self.log("destroy any existing cluster on node %s"%node)
+            self.rsh(node, "pcs cluster destroy")
+            self.rsh(node, "systemctl enable pacemaker")
+            self.rsh(node, "systemctl stop pacemaker_remote")
+            self.rsh(node, "systemctl disable pacemaker_remote")
+
+        # create a new cluster
+        # note: setting up cluster disable pacemaker service. re-enable it
+        for cluster in self.Env["clusters"]:
+            self.log("Creating cluster for nodes %s"%cluster)
+            node=cluster[0]
+            patterns = [r"crmd.*:\s*notice:\sState\stransition\sS_STARTING(\s->.*origin=do_started)?",
+                        r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
+            watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
+            watch.setwatch()
+            self.rsh_check(node, "pcs cluster auth -u hacluster -p ratester %s" % \
+                           " ".join(cluster))
+            self.rsh_check(node, "pcs cluster setup --force --name ratester %s" % \
+                           " ".join(cluster))
+            self.rsh_check(node, "systemctl enable pacemaker")
+            self.rsh_check(node, "pcs cluster start --all")
+            # Disable STONITH by default. A dedicated ScenarioComponent
+            # is in charge of enabling it if requested
+            self.rsh_check(node, "pcs property set stonith-enabled=false")
+            watch.lookforall()
+            assert not watch.unmatched, watch.unmatched
+
+    def setup_keep_cluster(self, cluster_manager):
+        for cluster in self.Env["clusters"]:
+            cluster_manager.log("Reusing cluster %s"%cluster)
+            # Disable STONITH by default. A dedicated ScenarioComponent
+            # is in charge of enabling it if requested
+            self.rsh_check(cluster[0], "pcs property set stonith-enabled=false")
+
+            # Stop and remove resource if it exists
+            # Note1: in order to avoid error when stopping the resource while
+            # in unknown state, we first reprobe the resource state.
+            # Note2: if you clean and delete before pacemaker had a
+            # chance to re-probe state, it will consider resource is stopped
+            # and will happily delete the resource from the cib even if
+            # galera is still running!
+            # Note3: after a cleanup, pacemaker may log a warning log
+            # if it finds the resource is still running. This does not
+            # count as an error for the CTS test
+            target=cluster[0]
+            rc = self.rsh(target, "pcs resource unmanage %s"%self.Env["rsc_name"])
+            if rc == 0:
+                cluster_manager.log("Previous resource exists, delete it")
+                # no longer true with pacemaker 1.1.18 and resource refresh
+                # patterns = [r"crmd.*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
+                #         for n in self.Env["nodes"]]
+                resource_pattern = re.sub(r'-(master|clone|bundle)','',self.Env["rsc_name"])
+                if self.Env["bundle"]:
+                    resource_pattern+='-bundle-docker-[0-9]'
+
+                patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", resource_pattern, n, '.*') \
+                            for n in cluster]
+                watch=LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
+                watch.setwatch()
+                self.rsh(target, "pcs resource refresh %s"%self.Env["rsc_name"])
+                watch.lookforall()
+                assert not watch.unmatched, watch.unmatched
+                self.rsh(target, "pcs resource disable %s"%self.Env["rsc_name"])
+                self.rsh(target, "pcs resource manage %s"%self.Env["rsc_name"])
+                self.rsh(target, "pcs resource delete %s --wait"%self.Env["rsc_name"])
+
+    def teardown_scenario(self, cluster_manager):
+        cluster_manager.log("Leaving cluster running on all nodes")
