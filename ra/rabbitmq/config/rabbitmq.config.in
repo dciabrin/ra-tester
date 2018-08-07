@@ -1,0 +1,31 @@
+[
+  {rabbit, [
+    {tcp_listen_options, [
+         binary,
+         {packet,        raw},
+         {reuseaddr,     true},
+         {keepalive,     true},
+         {backlog,       128},
+         {nodelay,       true},
+         {linger,        {true, 0}},
+         {exit_on_close, false}
+    ]},
+    {tcp_listeners, [{"%HOSTIP%", 5672}]},
+    {cluster_partition_handling, pause_minority},
+    {loopback_users, []},
+    {queue_master_locator, <<"min-masters">>},
+    {default_user, <<"guest">>},
+    {default_pass, <<"uberpasswd">>}
+  ]},
+  {kernel, [
+    {inet_dist_listen_max, 25672},
+    {inet_dist_listen_min, 25672},
+    {inet_dist_use_interface, {%HOSTIPCOMMA%}}
+  ]}
+,
+  {rabbitmq_management, [
+    {listener, [
+      {port, 15672}
+    ]}
+  ]}
+].
