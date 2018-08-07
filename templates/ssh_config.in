@@ -4,7 +4,7 @@ Host ${VMPREFIXNAME}*
      User root
      IdentityFile ${LOGINKEYNAME}
      ControlMaster auto
-     ControlPath ~/.ssh/%r@%h:%p
+     ControlPath ~/.ssh/ratester-%r@%h:%p
      ControlPersist 600
      StrictHostKeyChecking no
      UserKnownHostsFile=/dev/null
