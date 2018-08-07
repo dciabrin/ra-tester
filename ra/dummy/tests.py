@@ -46,69 +46,27 @@ from racts.ratest import ResourceAgentTest, ReuseCluster
 tests = []
 
 class DummyCommonTest(ResourceAgentTest):
+    def bundle_command(self):
+        image=self.Env["container_image"]
+        return "pcs resource bundle create %s"\
+            " container docker image=%s network=host options=\"--user=root --log-driver=journald\""\
+            " run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
+            " storage-map id=map0 source-dir=/dev/log target-dir=/dev/log"\
+            " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"\
+            (self.Env["rsc_name"], image)
+
+    def resource_command(self):
+        return """pcs resource create dummy ocf:pacemaker:Dummy"""
+
     def setup_test(self, node):
-        '''Common setup for dummy test'''
-        # create a dummy resource, without starting it yet
-        # the real test will decide what to do with it
-
-        patterns = [r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
-        if self.Env["bundle"]:
-            patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe", "dummy-bundle-docker-[0-9]", n, 'not running') \
-                         for n in self.Env["nodes"]]
-        else:
-            patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe", "dummy", n, 'not running') \
-                         for n in self.Env["nodes"]]
-
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
-
-        if self.Env["bundle"]:
-            # image=self.Env["image"]
-            image="docker.io/tripleoupstream/centos-binary-mariadb:latest"
-            self.rsh_check(node,
-                           "pcs resource bundle create dummy-bundle container docker image=%s network=host options=\"--user=root --log-driver=journald\" run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123 storage-map id=map0 source-dir=/dev/log target-dir=/dev/log storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro --disabled"%image)
-
-        meta = self.Env["meta"] or ""
-        if self.Env["bundle"]:
-            meta += "bundle %s"%self.Env["rsc_name"]
-
-        if meta != "":
-            meta = "meta %s"%meta
-            
-        self.rsh_check(node,
-                       "pcs resource create dummy ocf:pacemaker:Dummy %s %s" % (
-                       meta,
-                        "" if self.Env["bundle"] else "--disabled"
-                    ))
-        # Note: starting in target-role:Stopped first triggers a demote, then a stop
-        # Note: adding a resource forces a first probe (INFO: MySQL is not running)
-        watch.lookforall()
-        assert not watch.unmatched, watch.unmatched
+        self.setup_inactive_resource(self.Env["nodes"])
 
     def teardown_test(self, node):
-        # handy debug hook
-        if self.Env.has_key("keep_resources"):
-            return 1
-
-        # give back control to pacemaker in case the test disabled it
-        self.rsh_check(node, "pcs resource manage %s"%self.Env["rsc_name"])
-
-        # delete the resource created for this test
-        # note: deleting a resource triggers an implicit stop, and that
-        # implicit delete will fail when ban constraints are set.
-        self.rsh_check(node, "pcs resource delete %s"%self.Env["rsc_name"])
+        self.delete_resource(self.Env["nodes"])
 
     def errorstoignore(self):
-        return [
-            # docker daemon is quite verbose, but all real errors are reported by pacemaker
-            r"dockerd-current.*:\s*This node is not a swarm manager",
-            r"dockerd-current.*:\s*No such container",
-            r"dockerd-current.*:\s*No such image",
-            r"dockerd-current.*Handler for GET.*/.*returned error: (network|plugin).*not found",
-            r"dockerd-current.*Handler for GET.*/.*returned error: get.*no such volume",
-            # pengine logs spurious error on regular operations
-            r"pengine.*error: Could not fix addr for "
-        ]
+        return ResourceAgentTest.errorstoignore(self)
+
 
 
 class ClusterStart(DummyCommonTest):
@@ -118,12 +76,14 @@ class ClusterStart(DummyCommonTest):
         self.name = "ClusterStart"
 
     def test(self, target):
-        '''Start an entire dummy resource'''
-        # force pacemaker to probe the disable state before starting
-        # the test
+        # setup_test has created the inactive resource
+
+        # force a probe to ensure pacemaker knows that the resource
+        # is in disabled state
+
+        probe_pattern = self.resource_name_probe_pattern()
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
-                                           "dummy-bundle-docker-[0-9]" if self.Env["bundle"] else "dummy",
-                                           n, 'not running') \
+                                           probe_pattern, n, 'not running') \
                     for n in self.Env["nodes"]]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
@@ -132,16 +92,20 @@ class ClusterStart(DummyCommonTest):
         assert not watch.unmatched, watch.unmatched
 
         # enable the resource and wait for pacemaker to start it
-        target_nodes=self.Env["nodes"]
-        ## bundles run resources on container nodes, not host nodes
+        name_pattern = self.resource_name_pattern()
         if self.Env["bundle"]:
-            target_nodes=["dummy-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", "dummy", n, 'ok') \
+            # bundles run resources on container nodes, not host nodes
+            target_nodes=["%s-bundle-%d"%(name_pattern,x) for x in range(len(self.Env["nodes"]))]
+        else:
+            target_nodes=self.Env["nodes"]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name_pattern, n, 'ok') \
                     for n in target_nodes]
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
         self.rsh_check(target, "pcs resource enable %s"%self.Env["rsc_name"])
         watch.look()
         assert not watch.unmatched, watch.unmatched
+
+        # teardown_test will delete the resource
 
 tests.append(ClusterStart)
