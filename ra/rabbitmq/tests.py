@@ -46,7 +46,7 @@ from racts.ratest import ResourceAgentTest, ReuseCluster
 tests = []
 
 class RabbitMQCommonTest(ResourceAgentTest):
-    def bundle_command(self):
+    def bundle_command(self, cluster_nodes):
         image=self.Env["container_image"]
         return "pcs resource bundle create %s"\
             " container docker image=%s network=host options=\"--user=root --log-driver=journald\""\
@@ -60,7 +60,7 @@ class RabbitMQCommonTest(ResourceAgentTest):
             " storage-map id=map6 source-dir=/var/log/rabbitmq target-dir=/var/log/rabbitmq options=rw"%\
             (self.Env["rsc_name"], image)
 
-    def resource_command(self):
+    def resource_command(self, cluster_nodes):
         return """pcs resource create rabbitmq ocf:heartbeat:rabbitmq-cluster set_policy='ha-all ^(?!amq\.).* {"ha-mode":"all"}' op stop interval=0s timeout=200s"""
 
     def setup_test(self, node):

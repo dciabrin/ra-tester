@@ -181,13 +181,13 @@ class ResourceAgentTest(CTSTest):
 
         # create a bundle that will host the resource
         if self.Env["bundle"]:
-            bundle_cmd = self.bundle_command() + " --disabled"
+            bundle_cmd = self.bundle_command(cluster_nodes) + " --disabled"
             self.rsh_check(node, bundle_cmd)
             meta += " bundle %s"%self.Env["rsc_name"]
 
         # create the resource, set it disabled if it is not
         # running in a bundle
-        resource_cmd = self.resource_command()
+        resource_cmd = self.resource_command(cluster_nodes)
         if meta != "": resource_cmd += " meta %s"%meta
         if not self.Env["bundle"]: resource_cmd += " --disabled"
         self.rsh_check(node, resource_cmd)
