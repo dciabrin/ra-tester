@@ -560,7 +560,7 @@ generate_ssh_config()
     LOGINKEYNAME=${PWD}/${LOGINKEYNAME} \
     envsubst <templates/ssh_config.in >ssh_config_${VMPREFIXNAME}
     if [ "x$HYPERVISOR" != "xlocalhost" ]; then
-        echo -e "     ProxyCommand ssh -o ControlMaster=auto -o ControlPath=~/.ssh/ratester-%r@%h:%p -o ControlPersist=30m -o CheckHostIP=no -W %h:%p $HYPERVISOR" >>ssh_config_${VMPREFIXNAME}
+        echo -e "     ProxyCommand ssh -o ControlMaster=auto -o ControlPath=~/.ssh/ratester-hypervisor-$HYPERVISOR:%p -o ControlPersist=30m -o CheckHostIP=no -W %h:%p $HYPERVISOR" >>ssh_config_${VMPREFIXNAME}
     fi
     for i in `seq 1 $NODES`; do
         local node=${VMPREFIXNAME}$i
