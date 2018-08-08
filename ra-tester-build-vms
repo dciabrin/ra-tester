@@ -74,6 +74,7 @@ VMCPU=1
 QEMUURI=qemu:///system
 CMDTIMEOUT=300
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+SSH_CONTROL_MASTER_OPTS="-o ControlMaster=auto -o ControlPath=~/.ssh/ratester-%r@%h:%p -o ControlPersist=30m -o CheckHostIP=no"
 LOGINKEYNAME=login-key
 FENCEKEYNAME=fence-key
 FENCEXVMKEYNAME=ratester_fence_xvm.key
@@ -99,13 +100,18 @@ function ssh_virsh {
     $SSH_HYPERVISOR "virsh $*"
 }
 
-SSH_HYPERVISOR="ssh -o ControlMaster=auto -o ControlPath=~/.ssh/ratester-%r@%h:%p -o ControlPersist=30m -o CheckHostIP=no $HYPERVISOR"
-SSH_PROXY_OPTS="-o ProxyCommand='ssh -o ControlMaster=auto -o ControlPath=~/.ssh/ratester-%r@%h:%p -o ControlPersist=30m -o CheckHostIP=no -W %h:%p $HYPERVISOR'"
+function configure_ssh_commands {
+    SSH_HYPERVISOR="ssh $SSH_CONTROL_MASTER_OPTS $HYPERVISOR"
+    SSH_PROXY_CMD="ssh $SSH_CONTROL_MASTER_OPTS -W %h:%p $HYPERVISOR"
+}
+
 VIRSH=ssh_virsh
 VIRT_INSPECTOR=ssh_virt_inspector
 VIRT_CUSTOMIZE=ssh_virt_customize
 
 # Generated based on user config
+SSH_HYPERVISOR=
+SSH_PROXY_CMD=
 SSHMAC=
 CLUSTERMAC=
 CLUSTERNWGW=
@@ -474,7 +480,7 @@ wait_for_node()
     # the node may reboot when first started, so loop here
     # until ssh is successful, rather than just ping
     echo "Wait until we can connect to ${VMPREFIXNAME}${nodenum}"
-    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS $SSH_PROXY_OPTS root@$nodeip true 2>/dev/null; do sleep 2; done"
+    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand='$SSH_PROXY_CMD' root@$nodeip true 2>/dev/null; do sleep 2; done"
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to get SSH connection to domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
@@ -483,14 +489,14 @@ wait_for_node()
     # tmp for opensuse: fix reboot
     if [ "$PKG_FORMAT" == "rpm" -a "$DISTRO" == "opensuse" ]; then
         echo "Update grub to fix reboot on ${VMPREFIXNAME}${nodenum}"
-        ssh -i $LOGINKEYNAME $SSH_OPTS $SSH_PROXY_OPTS root@$nodeip "grub2-mkconfig > /boot/grub2/grub.cfg"
+        ssh -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand="$SSH_PROXY_CMD" root@$nodeip "grub2-mkconfig > /boot/grub2/grub.cfg"
     fi
 
     # cloud-init and nocloud ds: ensure that cluster nw nic is brought up
     echo "Ensure reboot succeeds and cluster network is up"
-    ssh -i $LOGINKEYNAME $SSH_OPTS $SSH_PROXY_OPTS root@$nodeip "reboot && cat" || true
+    ssh -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand="$SSH_PROXY_CMD" root@$nodeip "reboot && cat" || true
     local clustermac=$(node_mac $CLUSTERMAC $nodenum)
-    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS $SSH_PROXY_OPTS root@$nodeip \"ip link | grep -B1 $clustermac | head -1 | grep -q 'state UP'\" 2>/dev/null; do sleep 2; done"
+    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand='$SSH_PROXY_CMD' root@$nodeip \"ip link | grep -B1 $clustermac | head -1 | grep -q 'state UP'\" 2>/dev/null; do sleep 2; done"
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to get verify cluster network status on domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
@@ -507,7 +513,7 @@ wait_for_pcsd()
     # SSH is not enough, pcsd has to be up and running to be able
     # to create a cluster from a single node
     echo "Wait until pcsd is up and running ${VMPREFIXNAME}${nodenum}"
-    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS $SSH_PROXY_OPTS root@$nodeip \"netstat -tnlp | grep -q ':2224\\s'\" 2>/dev/null; do sleep 2; done"
+    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand='$SSH_PROXY_CMD' root@$nodeip \"netstat -tnlp | grep -q ':2224\\s'\" 2>/dev/null; do sleep 2; done"
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to get pcsd status on domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
@@ -597,6 +603,7 @@ if [ "$IMG" == "" ]; then
     exit 1
 fi
 
+configure_ssh_commands
 if ! $VIRSH -c ${QEMUURI} list &>/dev/null; then
     echo "ERROR: Cannot connect to hypervisor at ${QEMUURI}" >&2
     echo "Check that user belongs to group 'kvm' or has proper sudo settings" >&2
