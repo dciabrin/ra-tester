@@ -218,7 +218,6 @@ class RATesterScenarioComponent(ScenarioComponent):
         for node in self.Env["nodes"]:
             self.log("destroy any existing cluster on node %s"%node)
             self.rsh(node, "pcs cluster destroy")
-            self.rsh(node, "systemctl enable pacemaker")
             self.rsh(node, "systemctl stop pacemaker_remote")
             self.rsh(node, "systemctl disable pacemaker_remote")
 
@@ -235,7 +234,8 @@ class RATesterScenarioComponent(ScenarioComponent):
                            " ".join(cluster))
             self.rsh_check(node, "pcs cluster setup --force --name ratester %s" % \
                            " ".join(cluster))
-            self.rsh_check(node, "systemctl enable pacemaker")
+            for n in cluster:
+                self.rsh_check(n, "systemctl enable pacemaker")
             self.rsh_check(node, "pcs cluster start --all")
             # Disable STONITH by default. A dedicated ScenarioComponent
             # is in charge of enabling it if requested
