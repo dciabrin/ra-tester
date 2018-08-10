@@ -71,7 +71,9 @@ class RabbitMQCommonTest(ResourceAgentTest):
         self.delete_resource(self.Env["nodes"])
 
     def errorstoignore(self):
-        return ResourceAgentTest.errorstoignore(self)
+        return ResourceAgentTest.errorstoignore(self) + [
+            "ERROR: Failed to forget node rabbit@.* via rabbit@.*"
+        ]
 
 
 
@@ -115,3 +117,48 @@ class ClusterStart(RabbitMQCommonTest):
         # teardown_test will delete the resource
 
 tests.append(ClusterStart)
+
+
+class ClusterRebootAllNodes(ClusterStart):
+    '''Start a rabbitmq cluster'''
+    def __init__(self, cm):
+        RabbitMQCommonTest.__init__(self,cm)
+        self.name = "ClusterRebootAllNodes"
+
+    def test(self, target):
+        # ClusterStart starts all the rabbitmq clones
+        ClusterStart.test(self, target)
+
+        # restart all the nodes forcibly
+        name_pattern = self.resource_name_pattern()
+        if self.Env["bundle"]:
+            # bundles run resources on container nodes, not host nodes
+            target_nodes=["%s-bundle-%d"%(name_pattern,x) for x in range(len(self.Env["nodes"]))]
+        else:
+            target_nodes=self.Env["nodes"]
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name_pattern, n, 'ok') \
+                    for n in target_nodes]
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        self.log("Force-reset nodes "%self.Env["nodes"])
+        for n in self.Env["nodes"]:
+            self.rsh(n, "echo b > /proc/sysrq-trigger")
+        self.log("Wait until all nodes are restarted and reachable over ssh")
+        for n in self.Env["nodes"]:
+            self.wait_until_restarted(n)
+        # wait until pacemaker restart all the rabbitmq clones
+        watch.lookforall()
+        assert not watch.unmatched, watch.unmatched
+
+        # teardown_test will delete the resource
+
+    def errorstoignore(self):
+        return ResourceAgentTest.errorstoignore(self) + [
+            # libvirt seems to log warnings when triggering the b sysreq
+            "libvirtd.*error : virPCIGetDeviceAddressFromSysfsLink:.*internal error: Failed to parse PCI config address",
+            # pengine is not happy if stonith is disabled
+            "pengine.*error: ENABLE STONITH TO KEEP YOUR RESOURCES SAFE",
+            "pengine.*error: Calculated transition .*(with errors), saving inputs"
+        ]
+
+tests.append(ClusterRebootAllNodes)
