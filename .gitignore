@@ -6,6 +6,10 @@
 tmp
 vm
 
+# images placeholder
+img
+imgs
+
 # non-regression logs
 log*
 *.txt
