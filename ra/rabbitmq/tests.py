@@ -57,7 +57,8 @@ class RabbitMQCommonTest(ResourceAgentTest):
             " storage-map id=map3 source-dir=/etc/localtime target-dir=/etc/localtime options=ro"\
             " storage-map id=map4 source-dir=/etc/rabbitmq target-dir=/etc/rabbitmq options=ro"\
             " storage-map id=map5 source-dir=/var/lib/rabbitmq target-dir=/var/lib/rabbitmq options=rw"\
-            " storage-map id=map6 source-dir=/var/log/rabbitmq target-dir=/var/log/rabbitmq options=rw"%\
+            " storage-map id=map6 source-dir=/var/log/rabbitmq target-dir=/var/log/rabbitmq options=rw"\
+            " storage-map id=map7 source-dir=/usr/lib/ocf target-dir=/usr/lib/ocf options=rw"%\
             (self.Env["rsc_name"], image)
 
     def resource_command(self, cluster_nodes):
