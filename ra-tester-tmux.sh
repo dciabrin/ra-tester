@@ -21,13 +21,16 @@ SESSION=
 SSH_ARGS=
 ROWS=3
 COLUMNS=1
+PANE_BASE_INDEX=
 
 pane_to_node()
 {
     local pane=$1
-    local panezero row col pos_in_col node
+    local panezero row col pos_in_col node pane_base_index
 
-    panezero=$((pane-1))
+    pane_base_index=$(tmux show-options -g -w -t $SESSION pane-base-index | cut -d' ' -f2)
+    pane_base_index="${pane_base_index:-0}"
+    panezero=$((pane-pane_base_index))
     row=$((panezero/COLUMNS))
     col=$((panezero%COLUMNS))
     pos_in_col=$(((ROWS*col)+row))
