@@ -46,8 +46,8 @@ from ra.galera.galerascenarios import GaleraSetupMixin
 scenarios = {}
 
 class GarbdRemoteSetup(RATesterScenarioComponent, GaleraSetupMixin):
-    def __init__(self, environment, verbose=False):
-        RATesterScenarioComponent.__init__(self, environment, verbose)
+    def __init__(self, environment):
+        RATesterScenarioComponent.__init__(self, environment)
 
     # def IsApplicable(self):
     #     return not self.Env.has_key("keep_cluster")

@@ -46,8 +46,8 @@ class RATesterFencingComponent(RATesterScenarioComponent):
     def get_user_name(self):
         return os.environ.get("USERNAME",os.environ.get("USER"))
         
-    def __init__(self, env, verbose=False):
-        RATesterScenarioComponent.__init__(self, env, verbose)
+    def __init__(self, env):
+        RATesterScenarioComponent.__init__(self, env)
         # we re-use the CTS' stonith-* params as configuration
         # of fencing. Only, we adapt the content to our needs.
         if self.Env["stonith-type"] == "fence_xvm":

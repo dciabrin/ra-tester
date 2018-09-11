@@ -41,15 +41,17 @@ from cts.remote    import RemoteFactory
 from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
 
-from racts.ratest import ResourceAgentTest, ReuseCluster
+from racts.ratest import ResourceAgentTest
 
 tests = []
 
 class GaleraCommonTest(ResourceAgentTest):
     def bundle_command(self, cluster_nodes):
-        image=self.Env["container_image"]
+        engine = self.Env["container_engine"]
+        name = self.Env["rsc_name"]
+        image = self.Env["container_image"]
         return "pcs resource bundle create %s"\
-            " container docker image=%s network=host options=\"--user=root --log-driver=journald\""\
+            " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " replicas=3 masters=3 run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
             " storage-map id=map0 source-dir=/dev/log target-dir=/dev/log"\
             " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"\
@@ -58,7 +60,7 @@ class GaleraCommonTest(ResourceAgentTest):
             " storage-map id=map4 source-dir=/etc/my.cnf.d target-dir=/etc/my.cnf.d options=ro"\
             " storage-map id=map5 source-dir=/var/lib/mysql target-dir=/var/lib/mysql options=rw"\
             " storage-map id=map6 source-dir=/var/log/mysql target-dir=/var/log/mysql options=rw"%\
-            (self.Env["rsc_name"], image)
+            (name, engine, image)
 
     def resource_command(self, cluster_nodes):
         return """pcs resource create galera ocf:heartbeat:galera wsrep_cluster_address='gcomm://%s' op promote timeout=60 on-fail=block"""%(",".join(cluster_nodes),)
@@ -83,7 +85,7 @@ class GaleraCommonTest(ResourceAgentTest):
 class ClusterStart(GaleraCommonTest):
     '''Start a dummy resource'''
     def __init__(self, cm):
-        GaleraCommonTest.__init__(self,cm)
+        GaleraCommonTest.__init__(self, cm)
         self.name = "ClusterStart"
 
     def test(self, target):

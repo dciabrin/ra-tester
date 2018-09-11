@@ -47,8 +47,8 @@ from racts.rascenario import RATesterScenarioComponent
 scenarios = {}
 
 class PrepareCluster(RATesterScenarioComponent):
-    def __init__(self, environment, verbose=False):
-        RATesterScenarioComponent.__init__(self, environment, verbose)
+    def __init__(self, environment):
+        RATesterScenarioComponent.__init__(self, environment)
 
 
 # The scenario below set up two basic configuration for the RA tests#
