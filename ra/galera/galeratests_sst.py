@@ -41,7 +41,7 @@ from cts.remote    import RemoteFactory
 from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
 
-from racts.ratest import ResourceAgentTest, ReuseCluster
+from racts.ratest import ResourceAgentTest
 
 from .galeratests import GaleraTest, ClusterStart
 

@@ -32,23 +32,27 @@ from cts import CTS
 from cts.CTStests import CTSTest
 from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
-from cts.CTSaudits import *
-from cts.CTSvars   import *
-from cts.patterns  import PatternSelector
-from cts.logging   import LogFactory
-from cts.remote    import RemoteFactory
-from cts.watcher   import LogWatcher
-from cts.environment import EnvFactory
+from cts.CTSaudits    import *
+from cts.CTSvars      import *
+from cts.patterns     import PatternSelector
+from cts.logging      import LogFactory
+from cts.remote       import RemoteFactory
+from cts.watcher      import LogWatcher
+from cts.environment  import EnvFactory
+from racts.cluster    import get_cluster_manager
+from racts.container  import get_container_engine
 from racts.rapatterns import RATemplates
 
 class RATesterScenarioComponent(ScenarioComponent):
     '''Assertion-friendly base class for scenario setup/teardown.
     '''
-    def __init__(self, environment, verbose=True):
+    def __init__(self, environment):
         self.rsh = RemoteFactory().getInstance()
         self.logger = LogFactory()
         self.Env = environment
-        self.verbose = verbose
+        self.verbose = self.Env["verbose"]
+        self.cluster_manager = get_cluster_manager(self.Env, self.verbose)
+        self.container_engine = get_container_engine(self.Env, self.verbose)
         self.ratemplates = RATemplates()
         self.dependencies = []
 
@@ -161,7 +165,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         if self.Env.has_key("skip_install_dependencies"): return
         # make sure a container runtime is available
         if self.Env.has_key("bundle"):
-            self.dependencies.append('docker')
+            self.dependencies.append(self.container_engine.package_name())
         # TODO delegate the install to an implementation class
         # based on the running distro
         for p in pkgs:
@@ -175,14 +179,6 @@ class RATesterScenarioComponent(ScenarioComponent):
                     if self.verbose: self.log("[Updating prerequisite %s on %s]"%(p, target))
                     self.rsh_check(target, "yum update -y %s"%p)
 
-    def pull_container_image(self, img):
-        for node in self.Env["nodes"]:
-            self.log("pulling container image %s on %s"%(img,node))
-            rc = self.rsh(node, "docker pull %s"%img)
-            assert rc == 0, \
-                "failed to pull container image on remote node \"%s\"" % \
-                (node,)
-
     def setup_scenario(self, cluster_manager):
         # install package pre-requisites
         for node in self.Env["nodes"]:
@@ -190,10 +186,10 @@ class RATesterScenarioComponent(ScenarioComponent):
 
         # container setup
         if self.Env.has_key("bundle"):
-            for node in self.Env["nodes"]:
-                self.rsh(node, "systemctl enable docker")
-                self.rsh(node, "systemctl start docker")
-            self.pull_container_image(self.Env["container_image"])
+            self.container_engine.enable_engine(self.Env["nodes"])
+            if not self.Env.has_key("skip_container_image_pull"):
+                self.container_engine.pull_image(self.Env["nodes"],
+                                                 self.Env["container_image"])
 
         # setup cluster
         if self.Env.has_key("keep_cluster"):
@@ -226,14 +222,12 @@ class RATesterScenarioComponent(ScenarioComponent):
         for cluster in self.Env["clusters"]:
             self.log("Creating cluster for nodes %s"%cluster)
             node=cluster[0]
-            patterns = [r"crmd.*:\s*notice:\sState\stransition\sS_STARTING(\s->.*origin=do_started)?",
-                        r"crmd.*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
+            patterns = [r"(crmd|pacemaker-controld).*:\s*notice:\sState\stransition\sS_STARTING(\s->.*origin=do_started)?",
+                        r"(crmd|pacemaker-controld).*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
             watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
             watch.setwatch()
-            self.rsh_check(node, "pcs cluster auth -u hacluster -p ratester %s" % \
-                           " ".join(cluster))
-            self.rsh_check(node, "pcs cluster setup --force --name ratester %s" % \
-                           " ".join(cluster))
+            self.cluster_manager.authenticate_nodes(cluster)
+            self.cluster_manager.create_cluster(cluster)
             for n in cluster:
                 self.rsh_check(n, "systemctl enable pacemaker")
             self.rsh_check(node, "pcs cluster start --all")
@@ -265,11 +259,11 @@ class RATesterScenarioComponent(ScenarioComponent):
             if rc == 0:
                 cluster_manager.log("Previous resource exists, delete it")
                 # no longer true with pacemaker 1.1.18 and resource refresh
-                # patterns = [r"crmd.*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
+                # patterns = [r"(crmd|pacemaker-controld).*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
                 #         for n in self.Env["nodes"]]
                 resource_pattern = re.sub(r'-(master|clone|bundle)','',self.Env["rsc_name"])
                 if self.Env["bundle"]:
-                    resource_pattern+='-bundle-docker-[0-9]'
+                    resource_pattern+='-bundle-%s-[0-9]'%self.Env["container_engine"]
 
                 patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", resource_pattern, n, '.*') \
                             for n in cluster]

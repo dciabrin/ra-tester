@@ -48,8 +48,8 @@ from racts.rascenario import RATesterScenarioComponent
 scenarios = {}
 
 class PrepareCluster(RATesterScenarioComponent):
-    def __init__(self, environment, verbose=False):
-        RATesterScenarioComponent.__init__(self, environment, verbose)
+    def __init__(self, environment):
+        RATesterScenarioComponent.__init__(self, environment)
         self.dependencies = ["mariadb-server-galera"]
 
     def setup_configs(self, cluster_nodes):
@@ -81,11 +81,11 @@ class PrepareCluster(RATesterScenarioComponent):
             if not self.Env.has_key("galera_skip_install_db"):
                 self.rsh(node, "rm -rf /var/lib/mysql")
                 self.rsh(node, "mkdir -p /var/lib/mysql")
-            self.rsh(node, "chown -R %s:%s /var/log/mysql /var/lib/mysql"%\
-                     (self.Env["galera_user"],self.Env["galera_user"]))
             if not self.Env.has_key("galera_skip_install_db"):
                 self.log("recreating empty mysql database on node %s"%node)
-                self.rsh(node, "sudo -u mysql mysql_install_db")
+                self.rsh(node, "mysql_install_db")
+            self.rsh(node, "chown -R %s:%s /var/log/mysql /var/lib/mysql"%\
+                     (self.Env["galera_user"],self.Env["galera_user"]))
 
 
 
@@ -109,7 +109,8 @@ class BundleSetup(PrepareCluster):
         self.Env["rsc_name"] = "galera-bundle"
         self.Env["meta"] = "container-attribute-target=host notify=true"
         self.Env["galera_user"] = "42434" # galera user uid in kolla image
-        self.Env["container_image"] = "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
+        if not self.Env["container_image"]:
+            self.Env["container_image"] = "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["BundleSetup"]=[BundleSetup]

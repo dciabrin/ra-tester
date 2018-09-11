@@ -6,7 +6,7 @@ Log templates used by ScenarioComponent and CTSTests, extends Pacemaker's CTS
  '''
 
 __copyright__ = '''
-Copyright (C) 2016 Damien Ciabrini <dciabrin@redhat.com>
+Copyright (C) 2016-2018 Damien Ciabrini <dciabrin@redhat.com>
 Licensed under the GNU GPL.
 '''
 
@@ -41,7 +41,7 @@ class RATemplates(object):
             raise KeyError(template)
 
     def pat_rsc_remote_op(self, operation, resource, node, status):
-        return r"crmd.*:\s*(Result\sof\s%s\soperation\sfor\s%s\son\s%s.*\(%s\)|"\
+        return r"(crmd|pacemaker-controld).*:\s*(Result\sof\s%s\soperation\sfor\s%s\son\s%s.*\(%s\)|"\
                r"Operation %s_%s.*:\s*%s \(node=%s,.*,\s*confirmed=true\))"%\
             (operation, resource, node, status, resource,
              "monitor" if operation == "probe" else operation, status, node)
