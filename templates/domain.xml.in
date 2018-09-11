@@ -35,6 +35,9 @@
       <source network='${CLUSTERNW}'/>
       <model type='virtio'/>
     </interface>
+    <rng model='virtio'>
+      <backend model='random'>/dev/random</backend>
+    </rng>
     <serial type='pty'/>
     <console type='pty'/>
     <input type='mouse' bus='ps2'/>

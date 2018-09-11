@@ -212,6 +212,11 @@ if __name__ == '__main__':
     all_ra_modules = load_ra_modules()
     all_audits = RATesterAuditList(cluster_manager)
 
+    if not env.has_key("cluster_manager"):
+         env["cluster_manager"] = "pcmk1"
+    if not env.has_key("container_engine"):
+         env["container_engine"] = "docker"
+
     env["stonith"]=False
     if env["DoFencing"]==1 or (env.has_key("DoStonith") and env["DoStonith"]==1):
         env["stonith"]=True
@@ -300,14 +305,6 @@ if __name__ == '__main__':
                 for t in selected[m][s]["tests"]:
                     log.log("   - "+str(t.name));
         exit(0)
-
-    if env.has_key("verbose"):
-        for m in selected.keys():
-            for scenario in selected[m].values():
-                for t in scenario['tests']:
-                    t.verbose = True
-                for c in scenario['components']:
-                    c.verbose = True
 
     # Set the signal handler
     signal.signal(15, sig_handler)

@@ -87,8 +87,8 @@ class GaleraSetupMixin(object):
 scenarios = {}
 
 class GaleraPrepareCluster(RATesterScenarioComponent, GaleraSetupMixin):
-    def __init__(self, environment, verbose=False):
-        RATesterScenarioComponent.__init__(self, environment, verbose)
+    def __init__(self, environment):
+        RATesterScenarioComponent.__init__(self, environment)
 
     def setup_scenario(self, cluster_manager):
         if self.Env.has_key("keep_cluster"):
