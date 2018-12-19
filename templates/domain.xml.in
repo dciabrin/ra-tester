@@ -16,7 +16,7 @@
   <on_crash>destroy</on_crash>
   <devices>
     <disk type='volume' device='disk'>
-      <driver name='qemu' type='qcow2' cache='none'/>
+      <driver name='qemu' type='qcow2' cache='unsafe'/>
       <source pool='${VMPOOLNAME}' volume='${IMGNAME}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
