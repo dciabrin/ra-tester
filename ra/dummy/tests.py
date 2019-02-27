@@ -6,7 +6,7 @@ Simple test example on the Dummy RA.
  '''
 
 __copyright__ = '''
-Copyright (C) 2018 Damien Ciabrini <dciabrin@redhat.com>
+Copyright (C) 2018-2019 Damien Ciabrini <dciabrin@redhat.com>
 Licensed under the GNU GPL.
 '''
 
@@ -31,7 +31,6 @@ from stat import *
 from cts import CTS
 from cts.CTS import CtsLab
 from cts.CTStests import CTSTest
-from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
 from cts.CTSaudits import *
 from cts.CTSvars   import *
@@ -46,16 +45,18 @@ from racts.ratest import ResourceAgentTest
 tests = []
 
 class DummyCommonTest(ResourceAgentTest):
-    def bundle_command(self, cluster_nodes):
-        image=self.Env["container_image"]
+    def bundle_command(self, cluster_nodes, resource):
+        engine = self.Env["container_engine"]
+        name = resource["name"]
+        image = resource["container_image"]
         return "pcs resource bundle create %s"\
-            " container docker image=%s network=host options=\"--user=root --log-driver=journald\""\
+            " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
             " storage-map id=map0 source-dir=/dev/log target-dir=/dev/log"\
-            " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"\
-            (self.Env["rsc_name"], image)
+            " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"%\
+            (name, engine, image)
 
-    def resource_command(self, cluster_nodes):
+    def resource_command(self, cluster_nodes, resource):
         return """pcs resource create dummy ocf:pacemaker:Dummy"""
 
     def setup_test(self, node):
@@ -69,43 +70,37 @@ class DummyCommonTest(ResourceAgentTest):
 
 
 
-class ClusterStart(DummyCommonTest):
+class Start(DummyCommonTest):
     '''Start a dummy resource'''
     def __init__(self, cm):
         DummyCommonTest.__init__(self,cm)
-        self.name = "ClusterStart"
+        self.name = "Start"
 
     def test(self, target):
         # setup_test has created the inactive resource
 
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
-
-        probe_pattern = self.resource_name_probe_pattern()
+        rsc = self.Env["resource"]
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
-                                           probe_pattern, n, 'not running') \
+                                           self.resource_probe_pattern(rsc, n),
+                                           n, 'not running') \
                     for n in self.Env["nodes"]]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
-        self.rsh_check(target, "pcs resource refresh %s"%self.Env["rsc_name"])
+        watch = self.make_watch(patterns)
+        self.rsh_check(target, "pcs resource refresh %s"%rsc["name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
-        # enable the resource and wait for pacemaker to start it
-        name_pattern = self.resource_name_pattern()
-        if self.Env["bundle"]:
-            # bundles run resources on container nodes, not host nodes
-            target_nodes=["%s-bundle-%d"%(name_pattern,x) for x in range(len(self.Env["nodes"]))]
-        else:
-            target_nodes=self.Env["nodes"]
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name_pattern, n, 'ok') \
+        # bundles run OCF resources on bundle nodes, not host nodes
+        name = rsc["ocf_name"]
+        target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok') \
                     for n in target_nodes]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
-        self.rsh_check(target, "pcs resource enable %s"%self.Env["rsc_name"])
+        watch = self.make_watch(patterns)
+        self.rsh_check(target, "pcs resource enable %s"%rsc["name"])
         watch.look()
         assert not watch.unmatched, watch.unmatched
 
         # teardown_test will delete the resource
 
-tests.append(ClusterStart)
+tests.append(Start)

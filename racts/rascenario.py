@@ -30,7 +30,7 @@ import sys, signal, time, os, re, string, subprocess, tempfile
 from stat import *
 from cts import CTS
 from cts.CTStests import CTSTest
-from cts.CM_ais import crm_mcp
+# from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
 from cts.CTSaudits    import *
 from cts.CTSvars      import *
@@ -50,7 +50,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.rsh = RemoteFactory().getInstance()
         self.logger = LogFactory()
         self.Env = environment
-        self.verbose = self.Env["verbose"]
+        self.verbose = bool(self.Env["verbose"])
         self.cluster_manager = get_cluster_manager(self.Env, self.verbose)
         self.container_engine = get_container_engine(self.Env, self.verbose)
         self.ratemplates = RATemplates()
@@ -99,7 +99,7 @@ class RATesterScenarioComponent(ScenarioComponent):
                 rc = self.rsh(node, "mkdir -p %s" % remotedir)
                 assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
             src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
-            with tempfile.NamedTemporaryFile() as tmp:
+            with tempfile.NamedTemporaryFile(mode='w') as tmp:
                 if template:
                     with open(src,"r") as f: lines=f.readlines()
                     for line in lines:
@@ -205,17 +205,17 @@ class RATesterScenarioComponent(ScenarioComponent):
         pass
 
     def setup_new_cluster(self, cluster_manager):
-        # cleanup previous galera state on disk
-        for cluster in self.Env["clusters"]:
-            self.setup_configs(cluster)
-            self.setup_state(cluster)
-
         # stop cluster if previously running, failure is not fatal
         for node in self.Env["nodes"]:
             self.log("destroy any existing cluster on node %s"%node)
             self.rsh(node, "pcs cluster destroy")
             self.rsh(node, "systemctl stop pacemaker_remote")
             self.rsh(node, "systemctl disable pacemaker_remote")
+
+        # cleanup previous galera state on disk
+        for cluster in self.Env["clusters"]:
+            self.setup_configs(cluster)
+            self.setup_state(cluster)
 
         # create a new cluster
         # note: setting up cluster disable pacemaker service. re-enable it

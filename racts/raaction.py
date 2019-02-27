@@ -89,3 +89,8 @@ class ActionMixin(object):
             assert time.time()-start < timeout, "Restart timeout exceeded"
             res = self.rsh(node, "true")
             if res == 0: alive = True
+
+    def make_watch(self, patterns):
+        watch = self.create_watch(patterns, self.Env["DeadTime"])
+        watch.setwatch()
+        return watch

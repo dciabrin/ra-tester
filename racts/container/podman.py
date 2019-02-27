@@ -1,7 +1,7 @@
 from cts.logging import LogFactory
 from cts.remote import RemoteFactory
 from racts.raaction import ActionMixin
-from engine import ContainerEngine
+from .engine import ContainerEngine
 
 class Podman(ContainerEngine, ActionMixin):
     def __init__(self, env, verbose):
