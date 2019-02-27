@@ -31,7 +31,6 @@ from stat import *
 from cts import CTS
 from cts.CTS import CtsLab
 from cts.CTStests import CTSTest
-from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
 from cts.CTSaudits import *
 from cts.CTSvars   import *
@@ -51,14 +50,18 @@ class PrepareCluster(RATesterScenarioComponent):
         RATesterScenarioComponent.__init__(self, environment)
 
 
-# The scenario below set up two basic configuration for the RA tests#
+# The scenario below set up two basic configuration for the RA tests
 #   . SimpleSetup run the bare tests without customization
 #   . BundleSetup wraps the dummy resource into a bundle
 
 class SimpleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        self.Env["rsc_name"] = "dummy"
+        self.Env["resource"] = {
+            "name": "dummy",
+            "ocf_name": "dummy",
+            "bundle": None
+        }
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]
@@ -67,9 +70,13 @@ scenarios["SimpleSetup"]=[SimpleSetup]
 class BundleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        self.Env["bundle"] = True
-        self.Env["rsc_name"] = "dummy-bundle"
-        self.Env["container_image"] = "docker.io/tripleoqueens/centos-binary-rabbitmq:current-tripleo-rdo"
+        self.Env["resource"] = {
+            "name": "dummy-bundle",
+            "ocf_name": "dummy",
+            "meta": None,
+            "bundle": True,
+            "container_image": "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
+        }
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["BundleSetup"]=[BundleSetup]

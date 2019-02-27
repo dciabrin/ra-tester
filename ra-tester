@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 '''Resource Agents Tester
 
@@ -33,9 +33,11 @@ import sys, signal, time, os, re, string, subprocess, tempfile
 import argparse
 import inspect
 import yaml
+import traceback
 
 from cts.CTS import CtsLab
-from cts.CM_ais import crm_mcp
+# from cts.CM_ais import crm_mcp
+from cts.CM_common import crm_common
 from cts.CTSaudits import AuditList, LogAudit
 from cts.CTSscenarios import Sequence
 from cts.logging   import LogFactory
@@ -44,7 +46,6 @@ from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 from racts.rafencing import RATesterDefaultFencing
 from racts.raaudit import RATesterAuditList
 from racts.ctsoverride import *
-
 
 # These are globals so they can be used by the signal handler.
 cluster_manager = None
@@ -58,7 +59,10 @@ def load_ra_modules():
                 m = __import__('ra.'+d, fromlist=['ra'])
                 # TODO sanity checks
                 modules.append(m)
-            except ImportError:
+            except ImportError as e:
+                print("Error when importing RA module %s:"%d)
+                traceback.print_exc()
+                print()
                 pass
     return modules
 
@@ -106,7 +110,9 @@ def build_fencing_list(env, ra_modules):
     return result
 
 def count_all_tests(selected):
-    scenarios = sum([selected[s].values() for s in selected.keys()],[])
+    # for s in selected.keys():
+    #     print(list(selected[s].values()))
+    scenarios = sum([list(selected[s].values()) for s in selected.keys()],[])
     tests = [s["tests"] for s in scenarios]
     return len(sum(tests,[]))
 
@@ -127,7 +133,7 @@ def parse_and_strip_ratester_args(sysargs):
     args, unknownargs = parser.parse_known_args()
     if any(x in unknownargs for x in ("-h", "--help")):
         parser.print_help()
-        print
+        print()
     if args.ssh != None:
         rsh=RemoteFactory.rsh
         file_flag = " -F %s"%args.ssh
@@ -146,16 +152,16 @@ def parse_cluster_args_and_sanitize_node_args(cts_args):
         assert [isinstance(c, list) for c in clusters]
         assert [[isinstance(n, str) for n in c] for c in clusters]
     except yaml.parser.ParserError as e:
-        print "cannot parse value for option 'node': %s"%args.nodes
+        print("cannot parse value for option 'node': %s"%args.nodes)
     except AssertionError as e:
-        print "argument to option 'node' is invalid: %s"%args.nodes
+        print("argument to option 'node' is invalid: %s"%args.nodes)
     if clusters == None:
-        print "expected argument --node '[[name1,name2,...],...]'"
+        print("expected argument --node '[[name1,name2,...],...]'")
         sys.exit(0)
     nodes=" ".join([" ".join(cluster) for cluster in clusters])
-    print clusters
-    print nodes
-    print args
+    print(clusters)
+    print(nodes)
+    print(args)
     sys.exit(0)
 
 def parse_ratester_args(sysargs):
@@ -166,7 +172,7 @@ def parse_ratester_args(sysargs):
     knownargs, unknownargs = parser.parse_known_args()
     if any(x in unknownargs for x in ("-h", "--help")):
         parser.print_help()
-        print
+        print()
     if '[' in knownargs.nodes:
         try:
             clusters=yaml.load(knownargs.nodes)
@@ -174,11 +180,11 @@ def parse_ratester_args(sysargs):
             assert [isinstance(c, list) for c in clusters]
             assert [[isinstance(n, str) for n in c] for c in clusters]
         except yaml.parser.ParserError as e:
-            print "cannot parse value for option 'node': %s"%args.nodes
+            print("cannot parse value for option 'node': %s"%args.nodes)
         except AssertionError as e:
-            print "argument to option 'node' is invalid: %s"%args.nodes
+            print("argument to option 'node' is invalid: %s"%args.nodes)
         if clusters == None:
-            print "expected argument --node '[[name1,name2,...],...]'"
+            print("expected argument --node '[[name1,name2,...],...]'")
             sys.exit(0)
         ratester_env['clusters']=clusters
         ctsnodes=" ".join([" ".join(cluster) for cluster in clusters])
@@ -199,13 +205,15 @@ def inject_ratester_env(ratester_env,env):
 
 if __name__ == '__main__':
     # TODO: get rid of those temporary hooks in CTS
+    import tracemalloc
+    tracemalloc.start()
     prepare_cts()
     ratester_env, cts_args = parse_ratester_args(sys.argv[1:])
-    print ratester_env
-    print cts_args
+    print(ratester_env)
+    print(cts_args)
     env = CtsLab(["--stonith","no"]+cts_args)
     inject_ratester_env(ratester_env, env)
-    cluster_manager = crm_mcp(env)
+    cluster_manager = crm_common(env)
     log=LogFactory()
     log.add_stderr()
 
@@ -305,6 +313,14 @@ if __name__ == '__main__':
                 for t in selected[m][s]["tests"]:
                     log.log("   - "+str(t.name));
         exit(0)
+
+    if env.has_key("verbose"):
+        for m in selected.keys():
+            for scenario in selected[m].values():
+                for t in scenario['tests']:
+                    t.verbose = True
+                for c in scenario['components']:
+                    c.verbose = True
 
     # Set the signal handler
     signal.signal(15, sig_handler)

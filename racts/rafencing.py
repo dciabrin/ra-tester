@@ -30,7 +30,7 @@ import sys, signal, time, os, re, string, subprocess, tempfile
 from stat import *
 from cts import CTS
 from cts.CTStests import CTSTest
-from cts.CM_ais import crm_mcp
+# from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
 from cts.CTSaudits import *
 from cts.CTSvars   import *

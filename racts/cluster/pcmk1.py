@@ -18,3 +18,8 @@ class Pacemaker1(manager.ClusterManager, ActionMixin):
         self.rsh_check(nodes[0], 
                        "pcs cluster setup --force --name ratester %s" % \
                        " ".join(nodes))
+
+    def add_remote_node(self, cluster_nodes, node):
+        self.rsh_check(cluster_nodes[0], 
+                       "pcs cluster node add-remote %s %s reconnect_interval=60 op monitor interval=20" % \
+                       (node, node) )

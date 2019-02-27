@@ -8,4 +8,6 @@ class ClusterManager(object):
     def create_cluster(self, nodes):
         pass
 
+    def add_remote_node(self, cluster_nodes, node):
+        pass
 
