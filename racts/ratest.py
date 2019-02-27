@@ -31,7 +31,7 @@ from stat import *
 from cts import CTS
 from cts.CTS import CtsLab
 from cts.CTStests import CTSTest
-from cts.CM_ais import crm_mcp
+# from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
 from cts.CTSaudits import *
 from cts.CTSvars   import *
@@ -73,6 +73,10 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         except AssertionError as e:
             return self.failure(str(e))
 
+    @property
+    def resource(self):
+        return self.Env["resource"]
+        
     def teardown(self, node):
         '''Teardown, cleanup resource after the test'''
         try:
@@ -81,50 +85,60 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         except AssertionError as e:
             return self.failure(str(e))
 
-    def resource_name_pattern(self):
-        return re.sub(r'-(master|clone|bundle)','',self.Env["rsc_name"])
-
-    def resource_name_probe_pattern(self):
-        pattern = self.resource_name_pattern()
-        if self.Env["bundle"]:
+    def resource_probe_pattern(self, resource, node):
+        pattern = resource["ocf_name"]
+        if resource["bundle"]:
             pattern+='-bundle-%s-[0-9]'%self.Env["container_engine"]
         return pattern
 
+    def resource_target_nodes(self, resource, cluster):
+        name = resource["ocf_name"]
+        if resource["bundle"]:
+            target_nodes = ["%s-bundle-%d"%(name, x) for x in range(len(cluster))]
+        else:
+            target_nodes = cluster
+        return target_nodes
 
-    def setup_inactive_resource(self, cluster_nodes):
+    def setup_inactive_resource(self, cluster_nodes, resource=None):
         '''Common resource creation for test setup'''
+        if resource is None:
+            resource = self.resource
 
         node = cluster_nodes[0]
 
-        probe_pattern = self.resource_name_probe_pattern()
         patterns = [r"(crmd|pacemaker-controld).*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
-        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe", probe_pattern, n, 'not running') \
-                     for n in self.Env["nodes"]]
+        patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe",
+                                            self.resource_probe_pattern(resource, n),
+                                            n, 'not running') \
+                     for n in cluster_nodes]
 
         watch = self.create_watch(patterns, self.Env["DeadTime"])
         watch.setwatch()
 
-        meta = self.Env["meta"] or ""
+        meta = resource["meta"] or ""
 
         # create a bundle that will host the resource
-        if self.Env["bundle"]:
-            bundle_cmd = self.bundle_command(cluster_nodes)
+        if resource["bundle"]:
+            bundle_cmd = self.bundle_command(cluster_nodes, resource)
             bundle_cmd += " storage-map id=pcmk1 source-dir=/var/log/pacemaker target-dir=/var/log/pacemaker options=rw"
             bundle_cmd += " --disabled"
             self.rsh_check(node, bundle_cmd)
-            meta += " bundle %s"%self.Env["rsc_name"]
+            meta += " bundle %s"%resource["name"]
 
         # create the resource, set it disabled if it is not
         # running in a bundle
-        resource_cmd = self.resource_command(cluster_nodes)
+        resource_cmd = self.resource_command(cluster_nodes, resource)
         if meta != "": resource_cmd += " meta %s"%meta
-        if not self.Env["bundle"]: resource_cmd += " --disabled"
+        if not resource["bundle"]: resource_cmd += " --disabled"
         self.rsh_check(node, resource_cmd)
 
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
-    def delete_resource(self, cluster_nodes):
+    def delete_resource(self, cluster_nodes, resource=None):
+        if resource is None:
+            resource = self.resource
+
         # handy debug hook
         if self.Env.has_key("keep_resources"):
             return 1
@@ -132,12 +146,12 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         node = cluster_nodes[0]
 
         # give back control to pacemaker in case the test disabled it
-        self.rsh_check(node, "pcs resource manage %s"%self.Env["rsc_name"])
+        self.rsh_check(node, "pcs resource manage %s"%resource["name"])
 
         # delete the resource created for this test
         # note: deleting a resource triggers an implicit stop, and that
         # implicit delete will fail when ban constraints are set.
-        self.rsh_check(node, "pcs resource delete %s"%self.Env["rsc_name"])
+        self.rsh_check(node, "pcs resource delete %s"%resource["name"])
 
     def errorstoignore(self):
         return [
@@ -148,5 +162,15 @@ class ResourceAgentTest(CTSTest, ActionMixin):
             r"dockerd-current.*Handler for GET.*/.*returned error: (network|plugin).*not found",
             r"dockerd-current.*Handler for GET.*/.*returned error: get.*no such volume",
             # pengine logs spurious error on regular operations
-            r"pengine.*error: Could not fix addr for "
+            r"pengine.*error: Could not fix addr for ",
+            # bundle: when associating an ocf resource to a bundle, pengine
+            # logs some spurious errors (not fatal)
+            r"pengine.*:.*error: Could not determine address for bundle",
+            # bundle: pacemaker_remoted logs error when it's deleted
+            r"error:.*Connection terminated: Error in the push function",
+            r"error:.*Could not send remote message: Software caused connection abort",
+            r"error:.*Connection terminated: The specified session has been invalidated for some reason",
+            r"error:.*Connection terminated rc = -(53|10)",
+            r"error:.*Failed to send remote msg, rc = -(53|10)",
+            r"error:.*Failed to send remote lrmd tls msg, rc = -(53|10)"
         ]

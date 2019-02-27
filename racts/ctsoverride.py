@@ -62,6 +62,8 @@ def ratester_ensure_control_master(self, node):
     proc =  Popen(self._cmd([node, "true"]),
                  stdout = PIPE, stderr = PIPE, close_fds = True, shell = True)
     rc = proc.wait()
+    proc.stdout.close()
+    proc.stderr.close()
     return (proc, rc)
 
 def ratester_call_async(self, node, command, completionDelegate=None):

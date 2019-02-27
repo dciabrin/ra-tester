@@ -1,12 +1,13 @@
-from .galerascenarios import scenarios
-import galeratests
-import galeratests_node
-import galeratests_sst
+from .scenarios import scenarios
+from . import tests as t
+# import .tests_node
+# import .tests_sst
 # import galeratests_unmanaged
 
 __all__ = [ "tests", "scenarios", "name" ]
-tests = galeratests.tests + \
-        galeratests_node.tests + \
-        galeratests_sst.tests # + \
+tests = t.tests
+# + \
+#         tests_node.tests + \
+#         tests_sst.tests # + \
         # galeratests_unmanaged.tests
 name = "Galera"

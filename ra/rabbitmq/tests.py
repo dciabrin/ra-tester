@@ -31,7 +31,6 @@ from stat import *
 from cts import CTS
 from cts.CTS import CtsLab
 from cts.CTStests import CTSTest
-from cts.CM_ais import crm_mcp
 from cts.CTSscenarios import *
 from cts.CTSaudits import *
 from cts.CTSvars   import *
@@ -46,10 +45,12 @@ from racts.ratest import ResourceAgentTest
 tests = []
 
 class RabbitMQCommonTest(ResourceAgentTest):
-    def bundle_command(self, cluster_nodes):
-        image=self.Env["container_image"]
+    def bundle_command(self, cluster_nodes, resource):
+        engine = self.Env["container_engine"]
+        name = resource["name"]
+        image = resource["container_image"]
         return "pcs resource bundle create %s"\
-            " container docker image=%s network=host options=\"--user=root --log-driver=journald\""\
+            " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " replicas=3 run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
             " storage-map id=map0 source-dir=/dev/log target-dir=/dev/log"\
             " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"\
@@ -59,10 +60,11 @@ class RabbitMQCommonTest(ResourceAgentTest):
             " storage-map id=map5 source-dir=/var/lib/rabbitmq target-dir=/var/lib/rabbitmq options=rw"\
             " storage-map id=map6 source-dir=/var/log/rabbitmq target-dir=/var/log/rabbitmq options=rw"\
             " storage-map id=map7 source-dir=/usr/lib/ocf target-dir=/usr/lib/ocf options=rw"%\
-            (self.Env["rsc_name"], image)
+            (name, engine, image)
 
-    def resource_command(self, cluster_nodes):
-        return """pcs resource create rabbitmq ocf:heartbeat:rabbitmq-cluster set_policy='ha-all ^(?!amq\.).* {"ha-mode":"all"}' op stop interval=0s timeout=200s"""
+    def resource_command(self, cluster_nodes, resource):
+        name = resource["ocf_name"]
+        return """pcs resource create %s ocf:heartbeat:rabbitmq-cluster set_policy='ha-all ^(?!amq\\.).* {"ha-mode":"all"}' op stop interval=0s timeout=200s"""%name
 
     def setup_test(self, node):
         self.setup_inactive_resource(self.Env["nodes"])
@@ -85,32 +87,25 @@ class ClusterStart(RabbitMQCommonTest):
 
     def test(self, target):
         # setup_test has created the inactive resource
-
+        rsc = self.resource
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
-
-        probe_pattern = self.resource_name_probe_pattern()
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
-                                           probe_pattern, n, 'not running') \
+                                           self.resource_probe_pattern(rsc, n),
+                                           n, 'not running') \
                     for n in self.Env["nodes"]]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
-        self.rsh_check(target, "pcs resource refresh %s"%self.Env["rsc_name"])
+        watch = self.make_watch(patterns)
+        self.rsh_check(target, "pcs resource refresh %s"%rsc["name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
-        # enable the resource and wait for pacemaker to start it
-        name_pattern = self.resource_name_pattern()
-        if self.Env["bundle"]:
-            # bundles run resources on container nodes, not host nodes
-            target_nodes=["%s-bundle-%d"%(name_pattern,x) for x in range(len(self.Env["nodes"]))]
-        else:
-            target_nodes=self.Env["nodes"]
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name_pattern, n, 'ok') \
+        # bundles run OCF resources on bundle nodes, not host nodes
+        name = rsc["name"]
+        target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok') \
                     for n in target_nodes]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
-        self.rsh_check(target, "pcs resource enable %s"%self.Env["rsc_name"])
+        watch = self.make_watch(patterns)
+        self.rsh_check(target, "pcs resource enable %s"%name)
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
@@ -120,7 +115,7 @@ tests.append(ClusterStart)
 
 
 class ClusterRebootAllNodes(ClusterStart):
-    '''Start a rabbitmq cluster'''
+    '''Restart the rabbitmq cluster after all hosts have been rebooted'''
     def __init__(self, cm):
         RabbitMQCommonTest.__init__(self,cm)
         self.name = "ClusterRebootAllNodes"
@@ -130,16 +125,12 @@ class ClusterRebootAllNodes(ClusterStart):
         ClusterStart.test(self, target)
 
         # restart all the nodes forcibly
-        name_pattern = self.resource_name_pattern()
-        if self.Env["bundle"]:
-            # bundles run resources on container nodes, not host nodes
-            target_nodes=["%s-bundle-%d"%(name_pattern,x) for x in range(len(self.Env["nodes"]))]
-        else:
-            target_nodes=self.Env["nodes"]
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name_pattern, n, 'ok') \
+        rsc = self.resource
+        name = rsc["name"]
+        target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok') \
                     for n in target_nodes]
-        watch = self.create_watch(patterns, self.Env["DeadTime"])
-        watch.setwatch()
+        watch = self.make_watch(patterns)
         self.log("Force-reset nodes "%self.Env["nodes"])
         for n in self.Env["nodes"]:
             self.rsh(n, "echo b > /proc/sysrq-trigger")
