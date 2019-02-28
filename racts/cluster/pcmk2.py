@@ -12,10 +12,15 @@ class Pacemaker2(manager.ClusterManager, ActionMixin):
 
     def authenticate_nodes(self, nodes):
         for n in nodes:
-            self.rsh_check(n, "pcs host auth %s -u hacluster -p ratester" % n)
+            self.rsh_check(n, "pcs host auth -u hacluster -p ratester %s" % \
+                           " ".join(nodes))
 
     def create_cluster(self, nodes):
-        self.rsh_check(nodes[0], 
-                       "pcs cluster setup newcluster --force --name ratester %s" % \
+        self.rsh_check(nodes[0],
+                       "pcs cluster setup ratester --force %s" % \
                        " ".join(nodes))
 
+    def add_remote_node(self, cluster_nodes, node):
+        self.rsh_check(cluster_nodes[0],
+                       "pcs cluster node add-remote %s %s reconnect_interval=60 op monitor interval=20" % \
+                       (node, node) )

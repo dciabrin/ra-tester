@@ -75,13 +75,14 @@ QEMUURI=qemu:///system
 CMDTIMEOUT=300
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SSH_CONTROL_MASTER_OPTS="-o ControlMaster=auto -o ControlPath=~/.ssh/ratester-%r@%h:%p -o ControlPersist=30m -o CheckHostIP=no"
+GUESTFS_OPTS=""
 LOGINKEYNAME=login-key
 FENCEKEYNAME=fence-key
 FENCEXVMKEYNAME=ratester_fence_xvm.key
 
 
 function ssh_virt_inspector {
-    $SSH_HYPERVISOR "virt-inspector $1 '$2'"
+    $SSH_HYPERVISOR "env $GUESTFS_OPTS virt-inspector $1 '$2'"
 }
 
 function ssh_virt_customize {
@@ -93,7 +94,7 @@ function ssh_virt_customize {
 	esac
 	shift;
     done
-    $SSH_HYPERVISOR "virt-customize $CMD"
+    $SSH_HYPERVISOR "env $GUESTFS_OPTS virt-customize $CMD"
 }
 
 function ssh_virsh {

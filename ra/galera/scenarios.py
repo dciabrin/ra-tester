@@ -138,9 +138,9 @@ class SimpleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
         self.Env["resource"] = {
-            "name": "galera-master",
+            "name": "galera-clone",
             "ocf_name": "galera",
-            "meta": "master-max=3 --master",
+            "meta": "promotable master-max=3",
             "user": "mysql",
             "bundle": None
         }
@@ -158,7 +158,8 @@ class BundleSetup(PrepareCluster):
             "meta": "container-attribute-target=host notify=true",
             "user": "42434",
             "bundle": True,
-            "container_image": "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
+            "container_image": self.Env["galera_container_image"] or \
+                "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
         }
         PrepareCluster.setup_scenario(self,cm)
 
