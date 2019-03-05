@@ -2,5 +2,6 @@ DEVICE=eth1
 BOOTPROTO=static
 HWADDR=${CLUSTERMACPREFIX}${nodenum}
 IPADDR=${staticip}
+IPV6ADDR=${staticipv6}
 NETMASK=${netmask}
 ONBOOT=yes

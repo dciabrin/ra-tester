@@ -3,4 +3,6 @@
   <domain name='${CLUSTERNW}'/>
   <ip address='${CLUSTERNWGW}' netmask='${CLUSTERNWMASK}'>
   </ip>
+  <ip family='ipv6' address='${CLUSTER6NWGW}' prefix='64'>
+  </ip>
 </network>
