@@ -69,13 +69,13 @@ VFLAGS=
 
 # ---- Obscure config
 
-VMRAM=1024
-VMCPU=1
-QEMUURI=qemu:///system
-CMDTIMEOUT=300
+VMRAM=${VMRAM:-1024}
+VMCPU=${VMCPU:-1}
+QEMUURI=${QEMUURI:-qemu:///system}
+CMDTIMEOUT=${CMDTIMEOUT:-300}
+GUESTFS_OPTS=${GUESTFS_OPTS:-}
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SSH_CONTROL_MASTER_OPTS="-o ControlMaster=auto -o ControlPath=~/.ssh/ratester-%r@%h:%p -o ControlPersist=30m -o CheckHostIP=no"
-GUESTFS_OPTS=""
 LOGINKEYNAME=login-key
 FENCEKEYNAME=fence-key
 FENCEXVMKEYNAME=ratester_fence_xvm.key
@@ -211,6 +211,7 @@ define_networks()
         CLUSTERNW=$CLUSTERNW \
         CLUSTERNWGW=$CLUSTERNWGW \
         CLUSTERNWMASK=$CLUSTERNWMASK \
+        CLUSTER6NWGW=$CLUSTERNWGW \
         envsubst <templates/cluster-net.xml.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/ratmp-cluster-net.xml >/dev/null
         $VIRSH -c ${QEMUURI} net-define ${VMTMPPATH}/ratmp-cluster-net.xml
         $VIRSH -c ${QEMUURI} net-autostart ${CLUSTERNW}
@@ -304,12 +305,30 @@ node_dhcp_ip()
 node_static_ip()
 {
     trap 'on_error $LINENO' ERR
-
-    local gw=$($VIRSH -c ${QEMUURI} net-dumpxml $CLUSTERNW | sed -ne "s/.*ip.*address='\([^']*\)'.*/\1/p")
-    local mask=$($VIRSH -c ${QEMUURI} net-dumpxml $CLUSTERNW | sed -ne "s/.*netmask='\([^']*\)'.*/\1/p")
+    local gw=$($VIRSH -c ${QEMUURI} net-dumpxml $CLUSTERNW | grep netmask | sed -ne "s/.*ip.*address='\([^']*\)'.*/\1/p")
+    local mask=$($VIRSH -c ${QEMUURI} net-dumpxml $CLUSTERNW | grep netmask | sed -ne "s/.*netmask='\([^']*\)'.*/\1/p")
     local hashdata=$1
     local nodenum=$2
     python -c "import hashlib, struct; from netaddr import *; ipn=IPNetwork('$gw/$mask'); h=struct.unpack('I',hashlib.md5('$hashdata').digest()[:4])[0]; subip=h<<3&((1<<(32-ipn.prefixlen))-1); print ipn[subip+$nodenum]"
+}
+
+cluster_prefix_ipv6()
+{
+    local seed=$1
+    local tmp="fd00$(echo $seed | md5sum | head -c +8)"
+    # echo $tmp | sed -e 's/\(..\)/\1:/g' -e 's/:$//'
+    echo fd00$(echo $VMPREFIXNAME | md5sum | head -c +12) | sed -e 's/\(....\)/\1:/g' -e 's/:$//'
+}
+
+node_static_ipv6()
+{
+    trap 'on_error $LINENO' ERR
+
+    local seed=$1
+    local mac_prefix=$2
+    local node=$3
+    local network=$(cluster_prefix_ipv6)
+    echo $network"::"$(echo $mac_prefix | sed -e 's/://g' -e 's/.$//' -e 's/\(....\)/\1:/g')$node
 }
 
 prepare_base_image()
@@ -317,6 +336,7 @@ prepare_base_image()
     trap 'on_error $LINENO' ERR
 
     local etc_hosts=$(for i in `seq 1 $NODES`; do echo -n "$(node_static_ip $VMPREFIXNAME $i) $VMPREFIXNAME$i.ratester $VMPREFIXNAME$i\n"; done)
+    local etc_hosts6=$(for i in `seq 1 $NODES`; do echo -n "$(node_static_ipv6 $VMPREFIXNAME $CLUSTERMAC $i) $VMPREFIXNAME$i.v6.ratester $VMPREFIXNAME$i.v6\n"; done)
 
     echo "Creating temporary base image based on ${IMG}"
     $SSH_HYPERVISOR cp ${IMG} ${VMBASEIMG}
@@ -333,7 +353,7 @@ prepare_base_image()
     echo "Preparing temporary base image"
     # startup and access
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
-        --run-command "\\\`which echo\\\` -e \"$etc_hosts\" >> /etc/hosts" \
+        --run-command "\\\`which echo\\\` -e \"$etc_hosts\"\"$etc_hosts6\" >> /etc/hosts" \
         --timezone $(ls -l /etc/localtime | sed -s 's%.*/usr/share/zoneinfo/%%') \
         --run-command "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config" \
         --mkdir "/root/.ssh" \
@@ -440,11 +460,14 @@ setup_node()
     echo "Creating cloud-init metadata for ${VMPREFIXNAME}${nodenum}"
     DOMNAME=${VMPREFIXNAME}${nodenum} \
     CLUSTERIP=$(node_static_ip $VMPREFIXNAME $nodenum) \
+    CLUSTERIPV6=$(node_static_ipv6 $VMPREFIXNAME $CLUSTERMAC $nodenum) \
     CLUSTERNWGW=$CLUSTERNWGW \
     CLUSTERNWMASK=$CLUSTERNWMASK \
     envsubst <templates/cloudinit-meta-data.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/meta-data >/dev/null
+    $SSH_HYPERVISOR cp ${VMTMPPATH}/meta-data /tmp/dciabrin-meta-data-$DOMNAME
     DOMNAME=${VMPREFIXNAME}${nodenum} \
     envsubst <templates/cloudinit-user-data.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/user-data >/dev/null
+    $SSH_HYPERVISOR cp ${VMTMPPATH}/user-data /tmp/dciabrin-user-data-$DOMNAME
     $SSH_HYPERVISOR genisoimage -output ${VMTMPPATH}/ratmp-${ISONAME} -volid cidata -joliet -rock ${VMTMPPATH}/user-data ${VMTMPPATH}/meta-data
     $VIRSH -c ${QEMUURI} vol-upload --pool ${VMPOOLNAME} ${ISONAME} ${VMTMPPATH}/ratmp-${ISONAME}
 
@@ -482,7 +505,7 @@ wait_for_node()
     # the node may reboot when first started, so loop here
     # until ssh is successful, rather than just ping
     echo "Wait until we can connect to ${VMPREFIXNAME}${nodenum}"
-    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand='$SSH_PROXY_CMD' root@$nodeip true 2>/dev/null; do sleep 2; done"
+    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ControlMaster=no -o ProxyCommand='$SSH_PROXY_CMD -o ControlMaster=no' root@$nodeip true 2>/dev/null; do sleep 2; done"
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to get SSH connection to domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
@@ -498,7 +521,7 @@ wait_for_node()
     echo "Ensure reboot succeeds and cluster network is up"
     ssh -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand="$SSH_PROXY_CMD" root@$nodeip "reboot && cat" || true
     local clustermac=$(node_mac $CLUSTERMAC $nodenum)
-    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand='$SSH_PROXY_CMD' root@$nodeip \"ip link | grep -B1 $clustermac | head -1 | grep -q 'state UP'\" 2>/dev/null; do sleep 2; done"
+    timeout $CMDTIMEOUT sh -c "while ! ssh -q -i $LOGINKEYNAME $SSH_OPTS -o ControlMaster=no -o ProxyCommand='$SSH_PROXY_CMD -o ControlMaster=no' root@$nodeip \"ip link | grep -B1 $clustermac | head -1 | grep -q 'state UP'\" 2>/dev/null; do sleep 2; done"
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to get verify cluster network status on domain ${VMPREFIXNAME}${nodenum}" >&2
         exit 1
@@ -639,11 +662,13 @@ set -e
 # Creation and provisioning
 # -------------------------
 
+
 SSHMAC=$(mac_template ratester $VMPREFIXNAME 00)
 CLUSTERMAC=$(mac_template ratester $VMPREFIXNAME f0)
 CLUSTERNWCIDR=${CLUSTERNWCIDR:-$CLUSTERNWCIDR_DEFAULT}
 CLUSTERNWGW=$(cluster_gw $CLUSTERNWCIDR)
 CLUSTERNWMASK=$(mask_from_cidr $CLUSTERNWCIDR)
+
 
 # Pre-check: ensure ra-tester can delete VMs if they already exist
 ensure_teardown_if_vm_exist
@@ -671,6 +696,9 @@ generate_ssh_config
 
 # Wait for VMs availability
 for i in `seq 1 $NODES`; do wait_for_node $i; done
+
+# Delete all previous control master sockets
+rm -rf ~/.ssh/ratester-*
 
 # Wait for pcsd availability
 for i in `seq 1 $NODES`; do wait_for_pcsd $i; done
