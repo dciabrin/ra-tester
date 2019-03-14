@@ -43,6 +43,8 @@ from cts.CTSscenarios import Sequence
 from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
+from racts.cluster import autodetect_cluster_manager
+from racts.container import autodetect_container_engine
 from racts.rafencing import RATesterDefaultFencing
 from racts.raaudit import RATesterAuditList
 from racts.ctsoverride import *
@@ -220,10 +222,18 @@ if __name__ == '__main__':
     all_ra_modules = load_ra_modules()
     all_audits = RATesterAuditList(cluster_manager)
 
+    # if not env.has_key("cluster_manager"):
+    #      env["cluster_manager"] = "pcmk1"
     if not env.has_key("cluster_manager"):
-         env["cluster_manager"] = "pcmk1"
+        print("Detecting pacemaker version on the target cluster nodes")
+        name = autodetect_cluster_manager(env)
+        env["cluster_manager"] = name
+        print("Using cluster manager module \"%s\""%name)
     if not env.has_key("container_engine"):
-         env["container_engine"] = "docker"
+        print("Detecting container engine on the target cluster nodes")
+        name = autodetect_container_engine(env)
+        env["container_engine"] = name
+        print("Using container engine module \"%s\""%name)
 
     env["stonith"]=False
     if env["DoFencing"]==1 or (env.has_key("DoStonith") and env["DoStonith"]==1):

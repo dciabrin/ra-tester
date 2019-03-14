@@ -51,8 +51,8 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger = LogFactory()
         self.Env = environment
         self.verbose = bool(self.Env["verbose"])
-        self.cluster_manager = get_cluster_manager(self.Env, self.verbose)
-        self.container_engine = get_container_engine(self.Env, self.verbose)
+        self.cluster_manager = get_cluster_manager(self.Env)
+        self.container_engine = get_container_engine(self.Env)
         self.ratemplates = RATemplates()
         self.dependencies = []
 
