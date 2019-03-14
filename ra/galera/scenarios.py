@@ -101,11 +101,18 @@ class PrepareCluster(RATesterScenarioComponent):
         galeracfg=os.path.join(configdir, "galera.cnf.in")
         killgdb=os.path.join(configdir, "kill-during-txn.gdb")
         slowsst=os.path.join(configdir, "slow_down_sst.sh")
-        gcomm="gcomm://"+(",".join(cluster_nodes))
+        if self.Env.has_key("use_ipv6"):
+            gcomm="gcomm://"+(",".join([self.node_fqdn_ipv6(n) for n in cluster_nodes]))
+        else:
+            gcomm="gcomm://"+(",".join(cluster_nodes))
 
         for node in cluster_nodes:
-            ip=self.node_ip(node)
-            shortname=self.node_shortname(node)
+            if self.Env.has_key("use_ipv6"):
+                ip = "["+self.node_ipv6(node)+"]"
+                shortname = self.node_fqdn_ipv6(node)
+            else:
+                ip = self.node_ip(node)
+                shortname = self.node_shortname(node)
             self.copy_to_node(node,
                               [(galeracfg, "/etc/my.cnf.d/galera.cnf"),
                                (killgdb,   "/tmp/kill-during-txn.gdb"),
@@ -137,13 +144,19 @@ class PrepareCluster(RATesterScenarioComponent):
 class SimpleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        self.Env["resource"] = {
+        resource = {
             "name": "galera-clone",
             "ocf_name": "galera",
+            "alt_node_names": {},
             "meta": "promotable master-max=3",
             "user": "mysql",
             "bundle": None
         }
+        if self.Env.has_key("use_ipv6"):
+            nodes = self.Env["nodes"]
+            nodes_fqdn_ipv6 = [self.node_fqdn_ipv6(n) for n in nodes]
+            resource["alt_node_names"] = dict(zip(nodes,nodes_fqdn_ipv6))
+        self.Env["resource"] = resource
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]
@@ -152,15 +165,21 @@ scenarios["SimpleSetup"]=[SimpleSetup]
 class BundleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        self.Env["resource"] = {
+        resource = {
             "name": "galera-bundle",
             "ocf_name": "galera",
+            "alt_node_names": {},
             "meta": "container-attribute-target=host notify=true",
             "user": "42434",
             "bundle": True,
             "container_image": self.Env["galera_container_image"] or \
                 "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
         }
+        if self.Env.has_key("use_ipv6"):
+            nodes = self.Env["nodes"]
+            nodes_fqdn_ipv6 = [self.node_fqdn_ipv6(n) for n in nodes]
+            resource["alt_node_names"] = zip(nodes,nodes_fqdn_ipv6)
+        self.Env["resource"] = resource
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["BundleSetup"]=[BundleSetup]
@@ -174,8 +193,8 @@ scenarios["BundleSetup"]=[BundleSetup]
 #         nodes_ip=[self.rsh(target,"getent ahostsv4 %s | grep STREAM | cut -d' ' -f1"%n,
 #                            stdout=1).strip() for n in pcmk_nodes]
 #         pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,nodes_ip)])
-#         self.Env["galera_gcomm"]=",".join(nodes_ip)
 #         self.Env["galera_opts"] = "cluster_host_map='%s'"%pcmk_host_map
+#         self.Env["galera_gcomm"]=",".join(nodes_ip)
 #         self.Env["galera_rsc_name"] = "galera-master"
 #         self.Env["galera_user"] = "mysql"
 #         self.Env["galera_meta"] = "master-max=3 --master"
