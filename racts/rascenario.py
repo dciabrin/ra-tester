@@ -59,11 +59,17 @@ class RATesterScenarioComponent(ScenarioComponent):
     def node_fqdn(self, node):
         return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $3;exit}'"%node, stdout=1).strip()
 
+    def node_fqdn_ipv6(self, node):
+        return self.rsh(node, "getent ahosts %s.v6 | awk '/STREAM/ {print $3;exit}'"%node, stdout=1).strip()
+
     def node_shortname(self, node):
         return self.rsh(node, "hostname", stdout=1).strip()
 
     def node_ip(self, node):
         return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $1;exit}'"%node, stdout=1).strip()
+
+    def node_ipv6(self, node):
+        return self.rsh(node, "getent ahosts %s.v6 | awk '/STREAM/ {print $1;exit}'"%node, stdout=1).strip()
 
     def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False, template=False, nodes=False):
         if nodes == False:
