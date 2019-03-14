@@ -65,12 +65,19 @@ class GaleraCommonTest(ResourceAgentTest):
 
     def resource_command(self, cluster_nodes, resource):
         name = resource["ocf_name"]
-        nodes = ",".join(cluster_nodes)
+        alt_names = resource["alt_node_names"]
+        if alt_names:
+            nodes = ",".join([alt_names[n] for n in cluster_nodes])
+            host_map = ";".join(["%s:%s"%(a,b) for a,b in alt_names.items()])
+            opts = "cluster_host_map='%s'"%host_map
+        else:
+            nodes = ",".join(cluster_nodes)
+            opts = ""
         return "pcs resource create %s ocf:heartbeat:galera"\
-            " wsrep_cluster_address='gcomm://%s'"\
+            " wsrep_cluster_address='gcomm://%s' %s"\
             " log=/var/log/mysql/mysqld.log"\
             " op promote timeout=60 on-fail=block"""%\
-            (name, nodes)
+            (name, nodes, opts)
 
     def setup_test(self, node):
         self.setup_inactive_resource(self.Env["nodes"])

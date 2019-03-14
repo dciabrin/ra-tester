@@ -12,7 +12,8 @@ query_cache_type=0
 bind_address=%HOSTNAME%
 wsrep_provider=%GALERALIBPATH%
 wsrep_cluster_name="ratester"
-wsrep_cluster_address="gcomm://%GCOMM%"
+wsrep_cluster_address="%GCOMM%"
+wsrep_provider_options = gmcast.listen_addr=tcp://%HOSTIP%:4567;
 wsrep_slave_threads=1
 wsrep_certify_nonPK=1
 wsrep_max_ws_rows=131072
