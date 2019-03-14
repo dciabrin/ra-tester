@@ -1,14 +1,17 @@
 from cts.logging import LogFactory
 from cts.remote import RemoteFactory
 from racts.raaction import ActionMixin
-from . import manager
+from .manager import ClusterManager
 
-class Pacemaker1(manager.ClusterManager, ActionMixin):
-    def __init__(self, env, verbose=True):
+class Pacemaker1(ClusterManager, ActionMixin):
+    def __init__(self, env):
         self.Env = env
-        self.verbose = verbose
+        self.verbose = self.Env["verbose"]
         self.logger = LogFactory()
         self.rsh = RemoteFactory().getInstance()
+
+    def is_detected(self):
+        return self.rsh(self.Env["nodes"][0], "pacemakerd --version | grep -q 'Pacemaker 1.'") == 0
 
     def authenticate_nodes(self, nodes):
         self.rsh_check(nodes[0], "pcs cluster auth -u hacluster -p ratester %s" % \
