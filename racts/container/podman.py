@@ -1,14 +1,18 @@
 from cts.logging import LogFactory
 from cts.remote import RemoteFactory
 from racts.raaction import ActionMixin
+
 from .engine import ContainerEngine
 
 class Podman(ContainerEngine, ActionMixin):
-    def __init__(self, env, verbose):
+    def __init__(self, env):
         self.Env = env
-        self.verbose = verbose
+        self.verbose = self.Env["verbose"]
         self.logger = LogFactory()
         self.rsh = RemoteFactory().getInstance()
+
+    def is_detected(self):
+        return self.rsh(self.Env["nodes"][0], "podman --version") == 0
 
     def package_name(self):
         return "podman"
