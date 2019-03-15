@@ -592,6 +592,21 @@ generate_ssh_config()
     done
 }
 
+populate_ssh_known_hosts()
+{
+    trap 'on_error $LINENO' ERR
+
+    echo "Pre-populate SSH known hosts for cross-VM connections"
+
+    for i in `seq 1 $NODES`; do
+	local node=${VMPREFIXNAME}$j
+        local nodeip=$(node_dhcp_ip $i)
+	for j in `seq 1 $NODES`; do
+            local target_node=${VMPREFIXNAME}$j
+	    ssh -i $LOGINKEYNAME $SSH_OPTS -o ProxyCommand="$SSH_PROXY_CMD" root@$nodeip "ssh -o StrictHostKeyChecking=no $target_node true"
+	done
+    done
+}
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -698,6 +713,9 @@ for i in `seq 1 $NODES`; do wait_for_node $i; done
 
 # Delete all previous control master sockets
 rm -rf ~/.ssh/ratester-*
+
+# Pre-populate SSH known hosts for cross-VM connections
+populate_ssh_known_hosts
 
 # Wait for pcsd availability
 for i in `seq 1 $NODES`; do wait_for_pcsd $i; done
