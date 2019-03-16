@@ -95,14 +95,26 @@ class PrepareCluster(RATesterScenarioComponent):
         self.dependencies = ["mariadb-server-galera"]
 
     def setup_configs(self, cluster_nodes):
+        resource = self.Env["resource"]
+
         self.log("Setting up galera config files")
         basedir=os.path.dirname(os.path.abspath(__file__))
         configdir=os.path.join(basedir, "config")
         galeracfg=os.path.join(configdir, "galera.cnf.in")
         killgdb=os.path.join(configdir, "kill-during-txn.gdb")
         slowsst=os.path.join(configdir, "slow_down_sst.sh")
+        if resource["TLS"]:
+            tlstunnel="[sst]\ntca=/tls/all-mysql.crt\ntcert=/tls/mysql.pem\nsockopt=\"verify=1\""
+            tls="socket.ssl_key=/tls/mysql.key;socket.ssl_cert=/tls/mysql.crt;socket.ssl_ca=/tls/all-mysql.crt;"
+            rsync="rsync_tunnel"
+        else:
+            tlstunnel=""
+            tls=""
+            rsync="rsync"
         if self.Env.has_key("use_ipv6"):
             gcomm="gcomm://"+(",".join([self.node_fqdn_ipv6(n) for n in cluster_nodes]))
+        elif resource["TLS"]:
+            gcomm="gcomm://"+(",".join([self.node_fqdn(n) for n in cluster_nodes]))
         else:
             gcomm="gcomm://"+(",".join(cluster_nodes))
 
@@ -112,7 +124,10 @@ class PrepareCluster(RATesterScenarioComponent):
                 shortname = self.node_fqdn_ipv6(node)
             else:
                 ip = self.node_ip(node)
-                shortname = self.node_shortname(node)
+                if resource["TLS"]:
+                    shortname = self.node_fqdn(node)
+                else:
+                    shortname = self.node_shortname(node)
             self.copy_to_node(node,
                               [(galeracfg, "/etc/my.cnf.d/galera.cnf"),
                                (killgdb,   "/tmp/kill-during-txn.gdb"),
@@ -121,8 +136,35 @@ class PrepareCluster(RATesterScenarioComponent):
                                   "%HOSTIP%": ip,
                                   "%GCOMM%": gcomm,
                                   "%HOSTNAME%": shortname,
-                                  "%GALERALIBPATH%": "/usr/lib64/galera/libgalera_smm.so"
+                                  "%GALERALIBPATH%": "/usr/lib64/galera/libgalera_smm.so",
+                                  "%TLS%": tls,
+                                  "%RSYNC%": rsync,
+                                  "%TLSTUNNEL%": tlstunnel
                               })
+        if resource["TLS"]:
+            self.log("Generating certificates for TLS")
+            for node in cluster_nodes:
+                if self.Env.has_key("use_ipv6"):
+                    ca_node = self.node_fqdn_ipv6(node)
+                else:
+                    ca_node = self.node_fqdn(node)
+                self.rsh(node, "rm -rf /tls && mkdir /tls")
+                self.rsh_check(node, "openssl genrsa -out /tls/mysql.key 2048")
+                self.rsh_check(node, "openssl req -new -key /tls/mysql.key -x509 -days 365000"
+                               " -subj \"/CN=%s\" -out /tls/mysql.crt -batch"%ca_node)
+                self.rsh_check(node, "sh -c 'cat /tls/mysql.key /tls/mysql.crt > /tls/mysql.pem'")
+            self.log("Generating a common CA file for TLS")
+            if self.Env["use_ipv6"]:
+                ca_nodes = " ".join([self.node_fqdn_ipv6(n) for n in cluster_nodes])
+            else:
+                ca_nodes = " ".join([self.node_fqdn(n) for n in cluster_nodes])
+            for node in cluster_nodes:
+                self.rsh_check(node, "for n in %s; do ssh -o StrictHostKeyChecking=no $n 'cat /tls/mysql.crt'"
+                               ">> /tls/all-mysql.crt; done"%\
+                               ca_nodes)
+            for node in cluster_nodes:
+                self.rsh(node, "chown -R %s:%s /tls"%\
+                         (resource["user"],resource["user"]))
 
     def setup_state(self, cluster_nodes):
         resource=self.Env["resource"]
@@ -150,7 +192,8 @@ class SimpleSetup(PrepareCluster):
             "alt_node_names": {},
             "meta": "promotable master-max=3",
             "user": "mysql",
-            "bundle": None
+            "bundle": None,
+            "TLS": False
         }
         if self.Env.has_key("use_ipv6"):
             nodes = self.Env["nodes"]
@@ -173,7 +216,8 @@ class BundleSetup(PrepareCluster):
             "user": "42434",
             "bundle": True,
             "container_image": self.Env["galera_container_image"] or \
-                "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
+                "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo",
+            "TLS": False
         }
         if self.Env.has_key("use_ipv6"):
             nodes = self.Env["nodes"]
@@ -185,35 +229,25 @@ class BundleSetup(PrepareCluster):
 scenarios["BundleSetup"]=[BundleSetup]
 
 
-# class HostMapSetup(PrepareCluster):
+class TLSSetup(PrepareCluster):
 
-#     def setup_scenario(self, cm):
-#         target=self.Env["nodes"][0]
-#         pcmk_nodes=self.Env["nodes"]
-#         nodes_ip=[self.rsh(target,"getent ahostsv4 %s | grep STREAM | cut -d' ' -f1"%n,
-#                            stdout=1).strip() for n in pcmk_nodes]
-#         pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,nodes_ip)])
-#         self.Env["galera_opts"] = "cluster_host_map='%s'"%pcmk_host_map
-#         self.Env["galera_gcomm"]=",".join(nodes_ip)
-#         self.Env["galera_rsc_name"] = "galera-master"
-#         self.Env["galera_user"] = "mysql"
-#         self.Env["galera_meta"] = "master-max=3 --master"
-#         PrepareCluster.setup_scenario(self,cm)
+    def setup_scenario(self, cm):
+        resource = {
+            "name": "galera-clone",
+            "ocf_name": "galera",
+            "alt_node_names": {},
+            "meta": "promotable master-max=3",
+            "user": "mysql",
+            "bundle": None,
+            "TLS": True
+        }
+        nodes = self.Env["nodes"]
+        if self.Env.has_key("use_ipv6"):
+            ca_nodes = [self.node_fqdn_ipv6(n) for n in nodes]
+        else:
+            ca_nodes = [self.node_fqdn(n) for n in nodes]
+        resource["alt_node_names"] = dict(zip(nodes,ca_nodes))
+        self.Env["resource"] = resource
+        PrepareCluster.setup_scenario(self,cm)
 
-# # scenarios["HostMapSetup"]=[HostMapSetup]
-
-
-# class KollaSetup(PrepareCluster):
-
-#     def setup_scenario(self, cm):
-#         target=self.Env["nodes"][0]
-#         pcmk_nodes=self.Env["nodes"]
-#         pcmk_host_map=";".join(["%s:%s"%(a,b) for a,b in zip(pcmk_nodes,pcmk_nodes)])
-#         self.Env["galera_gcomm"] = ",".join(pcmk_nodes)
-#         self.Env["galera_opts"] = "cluster_host_map='%s'"%pcmk_host_map
-#         self.Env["galera_rsc_name"] = "galera-bundle"
-#         self.Env["galera_meta"] = "container-attribute-target=host bundle galera-bundle"
-#         self.Env["galera_bundle"] = True
-#         self.Env["galera_user"] = "42434" # mysql uid in kolla image
-#         PrepareCluster.setup_scenario(self,cm)
-# # scenarios["KollaSetup"]=[KollaSetup]
+scenarios["TLSSetup"]=[TLSSetup]
