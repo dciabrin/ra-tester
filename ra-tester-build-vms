@@ -616,6 +616,7 @@ while [ "$1" != "" ]; do
         --cluster-nw-cidr ) CLUSTERNWCIDR="$2"; shift 2;;
         --cluster-prefix-ipv6 ) CLUSTER6PREFIX="$2"; shift 2;;
         --ssh-nw ) SSHNW="$2"; shift 2;;
+        --vm-storage-path ) VMSTORAGEPATH="$2"; shift 2;;
         --opt-ssh-key ) ADDITIONALSSHKEY="$2"; shift 2;;
         --opt-pkgs ) ADDITIONALPKGS="$2"; shift 2;;
         --opt-cmd )
