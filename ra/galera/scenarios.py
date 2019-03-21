@@ -186,11 +186,12 @@ class PrepareCluster(RATesterScenarioComponent):
 class SimpleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
+        cluster = self.cluster_manager
         resource = {
-            "name": "galera-clone",
+            "name": cluster.meta_promotable_resource_name("galera"),
             "ocf_name": "galera",
             "alt_node_names": {},
-            "meta": "promotable master-max=3",
+            "meta": cluster.meta_promotable_config(len(self.Env["nodes"])),
             "user": "mysql",
             "bundle": None,
             "TLS": False
@@ -232,11 +233,12 @@ scenarios["BundleSetup"]=[BundleSetup]
 class TLSSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
+        cluster = self.cluster_manager
         resource = {
-            "name": "galera-clone",
+            "name": cluster.meta_promotable_resource_name("galera"),
             "ocf_name": "galera",
             "alt_node_names": {},
-            "meta": "promotable master-max=3",
+            "meta": cluster.meta_promotable_config(len(self.Env["nodes"])),
             "user": "mysql",
             "bundle": None,
             "TLS": True
