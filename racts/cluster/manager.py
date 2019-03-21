@@ -20,3 +20,11 @@ class ClusterManager(ABC):
     def add_remote_node(self, cluster_nodes, node):
         pass
 
+    @abstractmethod
+    def meta_promotable_resource_name(self, ocf_name):
+        pass
+
+    @abstractmethod
+    def meta_promotable_config(self, max_clones=None):
+        pass
+

@@ -27,3 +27,13 @@ class Pacemaker2(ClusterManager, ActionMixin):
         self.rsh_check(cluster_nodes[0],
                        "pcs cluster node add-remote %s %s reconnect_interval=60 op monitor interval=20" % \
                        (node, node) )
+
+    def meta_promotable_resource_name(self, ocf_name):
+        return "%s-clone"%ocf_name
+        pass
+
+    def meta_promotable_config(self, max_clones=None):
+        res = "promotable"
+        if max_clones:
+            res += " master-max=%d"%max_clones
+        return res
