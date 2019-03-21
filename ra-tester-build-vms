@@ -44,6 +44,7 @@ HYPERVISOR=localhost
 CLUSTERNW=ratester
 CLUSTERNWCIDR_DEFAULT=172.16.0.0/12
 CLUSTERNWCIDR=
+CLUSTER6PREFIX=
 SSHNW=ratesterssh
 
 # name of the storage pool that holds ra-tester VM's images
@@ -167,7 +168,9 @@ Options:
    --img QCOW2_IMAGE_PATH       QCOW2 cloud image to be used as a base for creating VMs
    --name VM_PREFIX_NAME        Name prefix for the VMs to be created (default: ratester)
    --nodes NUMBER               NUMBER of VMs to be created (default: 3)
-   --cluster-nw NW_NAME         Libvirt network for pacemaker and resources (no DHCP)
+   --cluster-nw NW_NAME         Libvirt IPv4 network for pacemaker and resources (no DHCP)
+   --cluster-nw-cidr NW_CIDR    Libvirt IPv4 network CIDR for pacemaker and resources (no DHCP)
+   --cluster-prefix-ipv6 IP     Libvirt IPv6 network prefix (/64) for pacemaker and resources (no DHCP)
    --ssh-nw NW_NAME             Secondary network, for debugging purpose
    --opt-ssh-key SSH_KEY        Optional public key to inject into created VMs
    --opt-pkgs PKG1,PKG2,...     Additional packages to install on created VMs
@@ -211,7 +214,7 @@ define_networks()
         CLUSTERNW=$CLUSTERNW \
         CLUSTERNWGW=$CLUSTERNWGW \
         CLUSTERNWMASK=$CLUSTERNWMASK \
-        CLUSTER6NWGW=$CLUSTERNWGW \
+        CLUSTER6NWGW=$CLUSTER6NWGW \
         envsubst <templates/cluster-net.xml.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/ratmp-cluster-net.xml >/dev/null
         $VIRSH -c ${QEMUURI} net-define ${VMTMPPATH}/ratmp-cluster-net.xml
         $VIRSH -c ${QEMUURI} net-autostart ${CLUSTERNW}
@@ -312,23 +315,18 @@ node_static_ip()
     python -c "import hashlib, struct; from netaddr import *; ipn=IPNetwork('$gw/$mask'); h=struct.unpack('I',hashlib.md5('$hashdata').digest()[:4])[0]; subip=h<<3&((1<<(32-ipn.prefixlen))-1); print ipn[subip+$nodenum]"
 }
 
-cluster_prefix_ipv6()
+default_prefix_ipv6()
 {
-    local seed=$1
-    local tmp="fd00$(echo $seed | md5sum | head -c +8)"
-    # echo $tmp | sed -e 's/\(..\)/\1:/g' -e 's/:$//'
-    echo fd00$(echo $VMPREFIXNAME | md5sum | head -c +12) | sed -e 's/\(....\)/\1:/g' -e 's/:$//'
+    echo fd00$(echo ra-tester | md5sum | head -c +12) | sed -e 's/\(....\)/\1:/g' -e 's/:$//'
 }
 
 node_static_ipv6()
 {
     trap 'on_error $LINENO' ERR
 
-    local seed=$1
-    local mac_prefix=$2
-    local node=$3
-    local network=$(cluster_prefix_ipv6)
-    echo $network"::"$(echo $mac_prefix | sed -e 's/://g' -e 's/.$//' -e 's/\(....\)/\1:/g')$node
+    local mac_prefix=$1
+    local node=$2
+    echo $CLUSTER6PREFIX"::"$(echo $mac_prefix | sed -e 's/://g' -e 's/.$//' -e 's/\(....\)/\1:/g')$node
 }
 
 prepare_base_image()
@@ -336,7 +334,7 @@ prepare_base_image()
     trap 'on_error $LINENO' ERR
 
     local etc_hosts=$(for i in `seq 1 $NODES`; do echo -n "$(node_static_ip $VMPREFIXNAME $i) $VMPREFIXNAME$i.ratester $VMPREFIXNAME$i\n"; done)
-    local etc_hosts6=$(for i in `seq 1 $NODES`; do echo -n "$(node_static_ipv6 $VMPREFIXNAME $CLUSTERMAC $i) $VMPREFIXNAME$i.v6.ratester $VMPREFIXNAME$i.v6\n"; done)
+    local etc_hosts6=$(for i in `seq 1 $NODES`; do echo -n "$(node_static_ipv6 $CLUSTERMAC $i) $VMPREFIXNAME$i.v6.ratester $VMPREFIXNAME$i.v6\n"; done)
 
     echo "Creating temporary base image based on ${IMG}"
     $SSH_HYPERVISOR cp ${IMG} ${VMBASEIMG}
@@ -460,7 +458,7 @@ setup_node()
     echo "Creating cloud-init metadata for ${VMPREFIXNAME}${nodenum}"
     DOMNAME=${VMPREFIXNAME}${nodenum} \
     CLUSTERIP=$(node_static_ip $VMPREFIXNAME $nodenum) \
-    CLUSTERIPV6=$(node_static_ipv6 $VMPREFIXNAME $CLUSTERMAC $nodenum) \
+    CLUSTERIPV6=$(node_static_ipv6 $CLUSTERMAC $nodenum) \
     CLUSTERNWGW=$CLUSTERNWGW \
     CLUSTERNWMASK=$CLUSTERNWMASK \
     envsubst <templates/cloudinit-meta-data.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/meta-data >/dev/null
@@ -617,6 +615,7 @@ while [ "$1" != "" ]; do
         --nodes ) NODES="$2"; shift 2;;
         --cluster-nw ) CLUSTERNW="$2"; SSHNW="$2"; shift 2;;
         --cluster-nw-cidr ) CLUSTERNWCIDR="$2"; shift 2;;
+        --cluster-prefix-ipv6 ) CLUSTER6PREFIX="$2"; shift 2;;
         --ssh-nw ) SSHNW="$2"; shift 2;;
         --opt-ssh-key ) ADDITIONALSSHKEY="$2"; shift 2;;
         --opt-pkgs ) ADDITIONALPKGS="$2"; shift 2;;
@@ -683,6 +682,8 @@ CLUSTERMAC=$(mac_template ratester $VMPREFIXNAME f0)
 CLUSTERNWCIDR=${CLUSTERNWCIDR:-$CLUSTERNWCIDR_DEFAULT}
 CLUSTERNWGW=$(cluster_gw $CLUSTERNWCIDR)
 CLUSTERNWMASK=$(mask_from_cidr $CLUSTERNWCIDR)
+CLUSTER6PREFIX=${CLUSTER6PREFIX:-$(default_prefix_ipv6)}
+CLUSTER6NWGW=${CLUSTER6PREFIX}"::1"
 
 
 # Pre-check: ensure ra-tester can delete VMs if they already exist
