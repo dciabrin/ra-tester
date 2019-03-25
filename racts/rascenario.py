@@ -163,9 +163,15 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger.debug(args)
 
     def rsh_check(self, target, command, expected = 0):
-        if self.verbose: self.log("> [%s] %s"%(target,command))
-        res=self.rsh(target, command+" &>/dev/null")
-        assert res == expected, "\"%s\" returned %d"%(command,res)
+        if self.verbose: self.logger.log("> [%s] %s"%(target,command))
+        temp="ratester-tmp%f"%time.time()
+        res=self.rsh(target, command+" &>"+temp)
+        if res != expected:
+            if type(res) is list: res = res[0]
+            self.rsh(target, "mv %s '%s-%s-%d'"%(temp, temp, command, res))
+        else:
+            self.rsh(target, "rm -f %s"%temp)
+        assert res == expected, "%s: \"%s\" returned %d"%(self, command, res)
 
     def check_package_dependencies(self, target, pkgs):
         if self.Env.has_key("skip_install_dependencies"): return
