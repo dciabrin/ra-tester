@@ -39,13 +39,13 @@ from cts.CTS import CtsLab
 # from cts.CM_ais import crm_mcp
 from cts.CM_common import crm_common
 from cts.CTSaudits import AuditList, LogAudit
-from cts.CTSscenarios import Sequence
 from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
 from racts.cluster import autodetect_cluster_manager
 from racts.container import autodetect_container_engine
 from racts.rafencing import RATesterDefaultFencing
+from racts.rarunner import RARunner
 from racts.raaudit import RATesterAuditList
 from racts.ctsoverride import *
 
@@ -362,9 +362,9 @@ if __name__ == '__main__':
             else:
                 setup_stonith = []
 
-            scenario = Sequence(cluster_manager,
-                                desc['components']+setup_stonith,
-                                all_audits,
-                                desc['tests'])
+            runner = RARunner(cluster_manager,
+                              desc['components']+setup_stonith,
+                              all_audits,
+                              desc['tests'])
             env.dump()
-            env.run(scenario, num_tests)
+            env.run(runner, num_tests)

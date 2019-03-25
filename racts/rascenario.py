@@ -211,13 +211,6 @@ class RATesterScenarioComponent(ScenarioComponent):
         pass
 
     def setup_new_cluster(self, cluster_manager):
-        # stop cluster if previously running, failure is not fatal
-        for node in self.Env["nodes"]:
-            self.log("destroy any existing cluster on node %s"%node)
-            self.rsh(node, "pcs cluster destroy")
-            self.rsh(node, "systemctl stop pacemaker_remote")
-            self.rsh(node, "systemctl disable pacemaker_remote")
-
         # cleanup previous galera state on disk
         for cluster in self.Env["clusters"]:
             self.setup_configs(cluster)
