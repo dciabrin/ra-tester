@@ -67,7 +67,7 @@ class SHMAudit(ClusterAudit):
     def is_applicable(self):
         return 1
 
-AllRAAuditClasses.append(SHMAudit)
+# AllRAAuditClasses.append(SHMAudit)
 
 # Replace CTS' FileAudit because we do not want reporting on
 # cluster-based warning such as "stale SHM"
