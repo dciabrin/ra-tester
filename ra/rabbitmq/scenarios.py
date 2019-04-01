@@ -64,6 +64,14 @@ class PrepareCluster(RATesterScenarioComponent):
             ip=self.node_ip(node)
             ipcomma=ip.replace(".",",")
             shortname=self.node_shortname(node)
+            if self.Env.has_key("use_ipv6"):
+                ipv6inetrc = "{inet6, true}."
+                ipv6rabbitmqserver = " -proto_dist inet6_tcp"
+                ipv6rabbitmqctl = "RABBITMQ_CTL_ERL_ARGS=\"-proto_dist inet6_tcp\""
+            else:
+                ipv6inetrc = ""
+                ipv6rabbitmqserver = ""
+                ipv6rabbitmqctl = ""
             self.copy_to_node(node,
                               [(rmqconfig,   "/etc/rabbitmq/rabbitmq.config"),
                                (rmqenv,      "/etc/rabbitmq/rabbitmq-env.conf"),
@@ -72,7 +80,10 @@ class PrepareCluster(RATesterScenarioComponent):
                               True, "root", "0444", {
                                   "%HOSTIP%": ip,
                                   "%HOSTIPCOMMA%": ipcomma,
-                                  "%HOSTNAME%": shortname
+                                  "%HOSTNAME%": shortname,
+                                  "%IPV6INETRC%": ipv6inetrc,
+                                  "%IPV6RABBITMQSERVER%": ipv6rabbitmqserver,
+                                  "%IPV6RABBITMQCTL%": ipv6rabbitmqctl
                               })
 
     def setup_state(self, cluster_nodes):
