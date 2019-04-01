@@ -1,9 +1,6 @@
 [
   {rabbit, [
     {tcp_listen_options, [
-         binary,
-         {packet,        raw},
-         {reuseaddr,     true},
          {keepalive,     true},
          {backlog,       128},
          {nodelay,       true},
@@ -11,7 +8,7 @@
          {exit_on_close, false}
     ]},
     {tcp_listeners, [{"%HOSTIP%", 5672}]},
-    {cluster_partition_handling, pause_minority},
+    {cluster_partition_handling, ignore},
     {loopback_users, []},
     {queue_master_locator, <<"min-masters">>},
     {default_user, <<"guest">>},
@@ -20,11 +17,13 @@
   {kernel, [
     {inet_dist_listen_max, 25672},
     {inet_dist_listen_min, 25672},
-    {inet_dist_use_interface, {%HOSTIPCOMMA%}}
+    {inet_dist_use_interface, {%HOSTIPCOMMA%}},
+    {net_ticktime, 15}
   ]}
 ,
   {rabbitmq_management, [
     {listener, [
+      {ip, "127.0.0.1"},
       {port, 15672}
     ]}
   ]}
