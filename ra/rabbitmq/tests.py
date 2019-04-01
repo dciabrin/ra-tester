@@ -88,6 +88,8 @@ class ClusterStart(RabbitMQCommonTest):
     def test(self, target):
         # setup_test has created the inactive resource
         rsc = self.resource
+        name = rsc["name"]
+        ocf_name = rsc["ocf_name"]
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
@@ -95,14 +97,13 @@ class ClusterStart(RabbitMQCommonTest):
                                            n, 'not running') \
                     for n in self.Env["nodes"]]
         watch = self.make_watch(patterns)
-        self.rsh_check(target, "pcs resource refresh %s"%rsc["name"])
+        self.rsh_check(target, "pcs resource refresh %s"%name)
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
         # bundles run OCF resources on bundle nodes, not host nodes
-        name = rsc["name"]
         target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok') \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", ocf_name, n, 'ok') \
                     for n in target_nodes]
         watch = self.make_watch(patterns)
         self.rsh_check(target, "pcs resource enable %s"%name)
