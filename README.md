@@ -10,26 +10,32 @@ and add our own RA scenarios on top of that.
 
 ## Prerequisites
 
-The script `ra-tester` must be run from a machine which is not part of
-the cluster, and where the CTS python modules are installed and in
-sync with the version of pacemaker running on the cluster. Usually
-it's as simple as:
+`ra-tester` is meant to be run from a host which is not part of the
+cluster. It uses [pipenv](https://github.com/pypa/pipenv) to install
+dependencies into an isolated virtual env from where you can run the
+resource agents' tests. It also relies on CTS, which requires some
+additional steps to set up due to it being unavailable in PyPI yet.
 
-    yum install -y pacemaker-cts
+    pip install pipenv
+    PIPENV_VENV_IN_PROJECT=1 pipenv --three install
+    pipenv run setup/install-cts.py
 
-On the cluster machine, you will need various packages for the tests
-to run correctly:
+Once the setup is complete, you can run `pipenv shell` to jump
+on the create virtualenv and run the `ra-tester` command.
 
-    yum install -y gdb screen docker
+On the cluster nodes, `ra-tester` will automatically install the
+required packages based on the tests that you want to run, so no
+particular setup is required.
 
-You can let ra-tester build test VM for you with all dependencies
-preinstalled.
+If you want to host your cluster on VMs, a helper script
+`ra-tester-build-vms` is available and its usage is explained below.
 
 
 ## Hardware requirements
 
 `ra-tester` has fairly small hardware requirements, a 3-node setup
-with 1 CPU and 1GB of RAM per machine is sufficient to run all tests.
+with 1 CPU and 2GB of RAM per machine is sufficient to run the majority
+of the test cases.
 
 It is expected that the pacemaker cluster run on a network without
 DHCP, to prevent any network issue caused by lease renewal.
@@ -41,7 +47,7 @@ of resource monitoring failures or network conditions.
 A helper script `ra-tester-build-vms` is provided so that you can
 bootstrap a VM-based 3-nodes cluster from any Linux distribution:
 
-    ./ra-tester-build-vms --img ./CentOS-7-x86_64-GenericCloud.qcow2 --name ratester
+    pipenv run ./ra-tester-build-vms --img ./CentOS-7-x86_64-GenericCloud.qcow2 --name ratester
 
 The example above will create three CentOS-based VM `ratester1`,
 `ratester2` and `ratester3`, with networking and fencing set up
