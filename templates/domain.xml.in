@@ -23,7 +23,7 @@
     <disk type='volume' device='cdrom'>
       <driver name='qemu' type='raw'/>
       <source pool='${VMPOOLNAME}' volume='${ISONAME}'/>
-      <target dev='vdb' bus='virtio'/>
+      <target dev='vdb' bus='ide'/>
     </disk>
     <interface type='network'>
       <mac address='${SSHMAC}'/>
