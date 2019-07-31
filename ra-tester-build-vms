@@ -188,7 +188,7 @@ EOF
 distro_pkg()
 {
     local pkg=$1
-    echo $DISTRO_PKGS | python -c "import json,sys; j=json.load(sys.stdin); r=j.get('$PKG_FORMAT-$DISTRO',{}).get('$pkg',False); print r if r else j.get('$PKG_FORMAT',{}).get('$pkg','$pkg')"
+    echo $DISTRO_PKGS | python -c "import json,sys; j=json.load(sys.stdin); r=j.get('$PKG_FORMAT-$DISTRO',{}).get('$pkg',False); print(r if r else j.get('$PKG_FORMAT',{}).get('$pkg','$pkg'))"
 }
 
 cleanup_tmp_files()
@@ -267,13 +267,13 @@ ip_from_cidr()
 {
     local cidr=$1
     local offset=$2
-    python -c "from netaddr import *; print IPNetwork('$cidr')[$offset]"
+    python -c "from netaddr import *; print(IPNetwork('$cidr')[$offset])"
 }
 
 mask_from_cidr()
 {
     local cidr=$1
-    python -c "from netaddr import *; print IPNetwork('$cidr').netmask"
+    python -c "from netaddr import *; print(IPNetwork('$cidr').netmask)"
 }
 
 cluster_gw()
@@ -312,7 +312,7 @@ node_static_ip()
     local mask=$($VIRSH -c ${QEMUURI} net-dumpxml $CLUSTERNW | grep netmask | sed -ne "s/.*netmask='\([^']*\)'.*/\1/p")
     local hashdata=$1
     local nodenum=$2
-    python -c "import hashlib, struct; from netaddr import *; ipn=IPNetwork('$gw/$mask'); h=struct.unpack('I',hashlib.md5('$hashdata').digest()[:4])[0]; subip=h<<3&((1<<(32-ipn.prefixlen))-1); print ipn[subip+$nodenum]"
+    python -c "import hashlib, struct; from netaddr import *; ipn=IPNetwork('$gw/$mask'); h=struct.unpack('I',hashlib.md5(b'$hashdata').digest()[:4])[0]; subip=h<<3&((1<<(32-ipn.prefixlen))-1); print(ipn[subip+$nodenum])"
 }
 
 default_prefix_ipv6()
