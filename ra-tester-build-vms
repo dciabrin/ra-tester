@@ -389,15 +389,6 @@ prepare_base_image()
         --run-command "systemctl enable pcsd" \
         --mkdir /etc/cluster \
         --upload ${VMTMPPATH}/$FENCEXVMKEYNAME:/etc/cluster/fence_xvm.key
-
-    # SELinux settings
-    if [ $SELINUX -eq 1 ]; then
-        if [ "$PKG_FORMAT" == "rpm" -a "$DISTRO" == "rhel" ]; then
-            $VIRT_CUSTOMIZE ${VFLAGS} -m 1024 -a ${VMBASEIMG} --install openstack-selinux
-        fi
-    else
-        $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
-           --run-command "if [ -f /etc/selinux/config ]; then sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/selinux/config; fi"
     fi
 
     # convenience packages
@@ -409,6 +400,17 @@ prepare_base_image()
     if [ -f "$ADDITIONALSSHKEY" ]; then
         $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} --ssh-inject root:file:$ADDITIONALSSHKEY
     fi
+
+    # SELinux settings
+    if [ $SELINUX -eq 1 ]; then
+        if [ "$PKG_FORMAT" == "rpm" ]; then
+            $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} --selinux-relabel
+        fi
+    else
+        $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
+           --run-command "if [ -f /etc/selinux/config ]; then sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/selinux/config; fi"
+    fi
+
 }
 
 setup_node()
