@@ -34,6 +34,7 @@ import argparse
 import inspect
 import yaml
 import traceback
+import os
 
 from cts.CTS import CtsLab
 # from cts.CM_ais import crm_mcp
@@ -43,6 +44,7 @@ from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
 from racts.cluster import autodetect_cluster_manager
+from racts.package import autodetect_package_manager
 from racts.container import autodetect_container_engine
 from racts.rafencing import RATesterDefaultFencing
 from racts.rarunner import RARunner
@@ -171,6 +173,7 @@ def parse_ratester_args(sysargs):
     parser=argparse.ArgumentParser(sys.argv[0], add_help=False)
     parser.add_argument('--ssh', help='ssh config file that to connect to nodes')
     parser.add_argument('--nodes', help='nodes to use for the tests')
+    parser.add_argument('--package-mapping', help='YAML file that remaps package names based on distro')
     knownargs, unknownargs = parser.parse_known_args()
     if any(x in unknownargs for x in ("-h", "--help")):
         parser.print_help()
@@ -200,10 +203,16 @@ def parse_ratester_args(sysargs):
         rsh.Command += file_flag
         rsh.CpCommand += file_flag
 
+    mapping = os.path.abspath(knownargs.package_mapping or "distrib-pkgs.yml")
+    if not os.path.isfile(mapping):
+        print("could not load package mapping file '%s'"%mapping)
+        sys.exit(1)
+    ratester_env["package_mapping"] = mapping
     return (ratester_env, unknownargs)
 
 def inject_ratester_env(ratester_env,env):
-    env['clusters']=ratester_env['clusters']
+    for key in ['clusters', 'package_mapping']:
+        env[key] = ratester_env[key]
 
 if __name__ == '__main__':
     # TODO: get rid of those temporary hooks in CTS
@@ -234,6 +243,11 @@ if __name__ == '__main__':
         name = autodetect_container_engine(env)
         env["container_engine"] = name
         print("Using container engine module \"%s\""%name)
+    if not env.has_key("package_manager"):
+        print("Detecting package type and distribution flavor")
+        name = autodetect_package_manager(env)
+        env["package_manager"] = name
+        print("Package manager \"%s\" configured"%type(name).__name__)
 
     env["stonith"]=False
     if env["DoFencing"]==1 or (env.has_key("DoStonith") and env["DoStonith"]==1):
