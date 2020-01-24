@@ -174,6 +174,7 @@ class PrepareCluster(RATesterScenarioComponent):
                 self.log("recreating empty mysql database on node %s"%node)
                 self.rsh(node, "rm -rf /var/lib/mysql /var/log/mysql")
                 self.rsh(node, "mkdir -p /var/lib/mysql /var/log/mysql")
+                self.rsh(node, "which restorecon && restorecon -R /var/lib/mysql /var/log/mysql")
                 self.rsh(node, "sudo mysql_install_db")
             self.rsh(node, "chown -R %s:%s /var/log/mysql /var/lib/mysql"%\
                      (resource["user"],resource["user"]))
