@@ -1,0 +1,34 @@
+rpm-rhel:
+  mariadb-galera: mariadb-galera-server
+rpm-fedora:
+  mariadb-galera: mariadb-server
+  fence-agents-virsh: fence-agents-virsh
+rpm-centos:
+  mariadb-galera: mariadb-server
+  galera-dbg: galera-debuginfo
+rpm-opensuse:
+  fence-virtd: fence-agents
+  fence-agents-virsh: fence-agents
+  fence-agents-xvm: fence-agents
+  mariadb-galera: mariadb-server
+  galera: galera-3
+  galera-dbg: galera-3
+  garbd: galera-3
+  lsb-core: lsb-core
+rpm:
+  dig: bind-utils
+  fence-agents-xvm: fence-virt
+  galera: galera
+  galera-dbg: galera
+  garbd: galera
+  lsb-core: redhat-lsb-core
+deb:
+  dig: dnsutils
+  pacemaker-cts: pacemaker
+  fence-virtd: fence-agents
+  fence-agents-virsh: fence-agents
+  fence-agents-xvm: fence-agents
+  mariadb-galera: mariadb-server
+  galera: galera-3
+  galera-dbg: galera-3
+  garbd: galera-arbitrator-3
