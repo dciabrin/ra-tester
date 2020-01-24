@@ -59,6 +59,8 @@ ADDITIONALPKGS= #emacs-nox,vim
 # Additional libvirt customize setup
 ADDITIONALCMDS= #
 
+# whether we install cluster packages
+CLUSTERPKGS=1
 # whether we enable SELinux on hosts or not
 SELINUX=0
 # shall we allow recreating VM if they already exist?
@@ -175,6 +177,7 @@ Options:
    --opt-ssh-key SSH_KEY        Optional public key to inject into created VMs
    --opt-pkgs PKG1,PKG2,...     Additional packages to install on created VMs
    --opt-cmd RUN-CMD            Additional shell command to run in the VMs before setup
+   --skip-install-cluster       Do not install cluster packages (pacemaker, pcs, agents)
    --teardown                   Delete VMs and associated storage if they already exist
    --selinux                    Configure VMs to enable SELinux
    --verbose                    run all virsh command in verbose mode
@@ -379,13 +382,13 @@ prepare_base_image()
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
         --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/site-packages/cloudinit/sources/DataSourceNoCloud.py"
 
-    # pacemaker + fencing
+    if [ $CLUSTERPKGS -eq 1 ]; then
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
-        --install pacemaker,pacemaker-remote,$(distro_pkg pacemaker-cts) \
-        --install pcs,resource-agents \
+	--install pacemaker,pacemaker-remote,$(distro_pkg pacemaker-cts) \
+	--install pcs,resource-agents \
         --install $(distro_pkg fence-virtd),$(distro_pkg fence-agents-virsh),$(distro_pkg fence-agents-xvm) \
-        --password hacluster:password:ratester \
         --run-command "systemctl enable pcsd" \
+        --password hacluster:password:ratester \
         --mkdir /etc/cluster \
         --upload ${VMTMPPATH}/$FENCEXVMKEYNAME:/etc/cluster/fence_xvm.key
     fi
@@ -626,6 +629,7 @@ while [ "$1" != "" ]; do
                 ADDITIONALCMDS="$ADDITIONALCMDS\0000"
             fi
             ADDITIONALCMDS="$ADDITIONALCMDS--run-command\0000$2"; shift 2;;
+        --skip-install-cluster ) CLUSTERPKGS=0; shift;;
         --teardown ) TEARDOWN="1"; shift;;
         --selinux ) SELINUX=1; shift;;
         --verbose ) VFLAGS="$VFLAGS -v"; shift;;
@@ -721,8 +725,10 @@ rm -rf ~/.ssh/ratester-*
 # Pre-populate SSH known hosts for cross-VM connections
 populate_ssh_known_hosts
 
-# Wait for pcsd availability
-for i in `seq 1 $NODES`; do wait_for_pcsd $i; done
+if [ $CLUSTERPKGS -eq 1 ]; then
+    # Wait for pcsd availability
+    for i in `seq 1 $NODES`; do wait_for_pcsd $i; done
+fi
 
 cleanup_tmp_files
 
