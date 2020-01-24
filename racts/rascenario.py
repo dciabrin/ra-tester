@@ -40,6 +40,7 @@ from cts.remote       import RemoteFactory
 from cts.watcher      import LogWatcher
 from cts.environment  import EnvFactory
 from racts.cluster    import get_cluster_manager
+from racts.package    import get_package_manager
 from racts.container  import get_container_engine
 from racts.rapatterns import RATemplates
 
@@ -52,6 +53,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.Env = environment
         self.verbose = bool(self.Env["verbose"])
         self.cluster_manager = get_cluster_manager(self.Env)
+        self.package_manager = get_package_manager(self.Env)
         self.container_engine = get_container_engine(self.Env)
         self.ratemplates = RATemplates()
         self.dependencies = []
@@ -177,19 +179,17 @@ class RATesterScenarioComponent(ScenarioComponent):
         if self.Env.has_key("skip_install_dependencies"): return
         # make sure a container runtime is available
         if self.Env.has_key("bundle"):
-            self.dependencies.append(self.container_engine.package_name())
-        # TODO delegate the install to an implementation class
-        # based on the running distro
+            pkgs = pkgs+[self.container_engine.package_name()]
+
+        pkg_manager = self.Env["package_manager"]
         for p in pkgs:
-            res = self.rsh(target, "rpm -qa --qf '%%{NAME}\n' %s | grep %s"%(p, p))
-            if res != 0:
+            if not pkg_manager.is_installed(target, p):
                 if self.verbose: self.log("[Installing prerequisite %s on %s]"%(p, target))
-                self.rsh_check(target, "yum install -y %s"%p)
+                pkg_manager.install(target, p)
             else:
-                res = self.rsh(target, "repoquery -a --pkgnarrow=updates --qf 'UPDATE' %s | grep UPDATE"%(p,))
-                if res == 0:
+                if not pkg_manager.can_be_updated(target, p):
                     if self.verbose: self.log("[Updating prerequisite %s on %s]"%(p, target))
-                    self.rsh_check(target, "yum update -y %s"%p)
+                    pkg_manager.update(target, p)
 
     def setup_scenario(self, cluster_manager):
         # install package pre-requisites

@@ -126,38 +126,8 @@ VMBASEIMG=
 # Distro-specific settings
 PKG_FORMAT=
 DISTRO=
-DISTRO_PKGS=$(cat<<PKG
-{
-"rpm-rhel": {"mariadb-galera":"mariadb-galera-server"},
-"rpm-fedora": {"mariadb-galera":"mariadb-server",
-               "fence-agents-virsh":"fence-agents-virsh"},
-"rpm-centos": {"mariadb-galera":"mariadb-server",
-               "galera-dbg":"galera-debuginfo"},
-"rpm-opensuse": {"fence-virtd":"fence-agents",
-                 "fence-agents-virsh":"fence-agents",
-                 "fence-agents-xvm":"fence-agents",
-                 "mariadb-galera":"mariadb-server",
-                 "galera":"galera-3",
-                 "galera-dbg":"galera-3",
-                 "garbd":"galera-3"},
-"rpm": {"dig":"bind-utils",
-        "fence-agents-xvm": "fence-virt",
-        "galera":"galera",
-        "galera-dbg":"galera",
-        "garbd":"galera"},
-"deb": {"dig":"dnsutils",
-        "pacemaker-cts":"pacemaker",
-        "fence-virtd":"fence-agents",
-        "fence-agents-virsh":"fence-agents",
-        "fence-agents-xvm":"fence-agents",
-        "mariadb-galera":"mariadb-server",
-        "galera":"galera-3",
-        "galera-dbg":"galera-3",
-        "garbd":"galera-arbitrator-3"
-       }
-}
-PKG
-)
+DISTRO_PKGS=distrib-pkgs.yml
+
 
 usage()
 {
@@ -178,6 +148,7 @@ Options:
    --opt-pkgs PKG1,PKG2,...     Additional packages to install on created VMs
    --opt-cmd RUN-CMD            Additional shell command to run in the VMs before setup
    --skip-install-cluster       Do not install cluster packages (pacemaker, pcs, agents)
+   --package-mapping FILE       YAML file that remaps package names based on distro
    --teardown                   Delete VMs and associated storage if they already exist
    --selinux                    Configure VMs to enable SELinux
    --verbose                    run all virsh command in verbose mode
@@ -191,7 +162,7 @@ EOF
 distro_pkg()
 {
     local pkg=$1
-    echo $DISTRO_PKGS | python -c "import json,sys; j=json.load(sys.stdin); r=j.get('$PKG_FORMAT-$DISTRO',{}).get('$pkg',False); print(r if r else j.get('$PKG_FORMAT',{}).get('$pkg','$pkg'))"
+    cat $DISTRO_PKGS | python -c "import yaml,sys; j=yaml.safe_load(sys.stdin); r=j.get('$PKG_FORMAT-$DISTRO',{}).get('$pkg',False); print(r if r else j.get('$PKG_FORMAT',{}).get('$pkg','$pkg'))"
 }
 
 cleanup_tmp_files()
@@ -380,7 +351,8 @@ prepare_base_image()
 
     # ensure lp#1577982 is fixed otherwise cloud-init fail to assign ip properly
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
-        --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/site-packages/cloudinit/sources/DataSourceNoCloud.py"
+        --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/site-packages/cloudinit/sources/DataSourceNoCloud.py" \
+	--install $(distro_pkg lsb-core)
 
     if [ $CLUSTERPKGS -eq 1 ]; then
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
@@ -630,6 +602,7 @@ while [ "$1" != "" ]; do
             fi
             ADDITIONALCMDS="$ADDITIONALCMDS--run-command\0000$2"; shift 2;;
         --skip-install-cluster ) CLUSTERPKGS=0; shift;;
+        --package-mapping ) DISTRO_PKGS="$2"; shift 2;;
         --teardown ) TEARDOWN="1"; shift;;
         --selinux ) SELINUX=1; shift;;
         --verbose ) VFLAGS="$VFLAGS -v"; shift;;
