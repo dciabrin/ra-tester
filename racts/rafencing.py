@@ -42,6 +42,7 @@ from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
 
+
 class RATesterFencingComponent(RATesterScenarioComponent):
     def get_user_name(self):
         return os.environ.get("USERNAME",os.environ.get("USER"))

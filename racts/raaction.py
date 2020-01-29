@@ -28,6 +28,7 @@ Licensed under the GNU GPL.
 
 import time
 
+
 class ActionMixin(object):
     def crm_attr_set(self, target, attribute, value, expected = 0):
         command="crm_attribute -N %s -l reboot --name %s -v %s"% \

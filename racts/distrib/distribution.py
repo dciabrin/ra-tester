@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import yaml
 
+
 class Distribution(ABC):
     def __init__(self, env):
         self.Env = env

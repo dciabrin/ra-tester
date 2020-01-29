@@ -10,8 +10,10 @@ managers = {
 
 priority = ["pcmk2", "pcmk1"]
 
+
 def get_cluster_manager(env):
     return managers[env["cluster_manager"]](env)
+
 
 def autodetect_cluster_manager(env):
     target = env["nodes"][0]

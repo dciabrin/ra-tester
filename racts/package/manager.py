@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import yaml
 
+
 class PackageManager(ABC):
     def __init__(self, env, pkg_format, flavor):
         self.Env = env

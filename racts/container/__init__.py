@@ -11,12 +11,14 @@ engines = {
 
 priority = ["podman", "docker"]
 
+
 def get_container_engine(env):
     mapping = {
         "docker": Docker,
         "podman": Podman
     }
     return engines[env["container_engine"]](env)
+
 
 def autodetect_container_engine(env):
     try:

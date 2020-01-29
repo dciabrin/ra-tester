@@ -3,6 +3,7 @@ from cts.remote import RemoteFactory
 from .manager import PackageManager
 from .rpm import Rpm
 
+
 class Dnf(Rpm):
     def __init__(self, env, pkg_format, flavor):
         PackageManager.__init__(self, env, pkg_format, flavor)
