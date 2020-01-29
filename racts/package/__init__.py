@@ -9,10 +9,12 @@ managers = {
         "rpm": Rpm
 }
 
+
 def get_package_manager(env):
     # TODO: check whether we can create an instance instead of
     # doing a relying on a singleton
     return env["package_manager"]
+
 
 def autodetect_package_manager(env):
     rsh = RemoteFactory().getInstance()

@@ -33,6 +33,7 @@ from cts.watcher   import LogWatcher
 from cts.environment import Environment
 from cts.CTS import NodeStatus
 
+
 def ratester___get_lines(self, timeout):
     count=0
     if not len(self.file_list):
@@ -52,6 +53,7 @@ def ratester___get_lines(self, timeout):
             self.hosts=[x for x in self.hosts if x != t.node]
             self.file_list=[x for x in self.file_list if x.host != t.node]
 
+
 def ratester_ensure_control_master(self, node):
     # SSH control master: at start of after a node is fenced, the
     # master socket might not be present. If so, we cannot 'readlines'
@@ -66,6 +68,7 @@ def ratester_ensure_control_master(self, node):
     proc.stderr.close()
     return (proc, rc)
 
+
 def ratester_call_async(self, node, command, completionDelegate=None):
     proc, rc = self.ensure_control_master(node)
     if rc != 0:
@@ -75,6 +78,7 @@ def ratester_call_async(self, node, command, completionDelegate=None):
         return 0
     else:
         return self.orig_call_async(node, command, completionDelegate)
+
 
 def ratester___call__(self, node, command, stdout=0, synchronous=1, silent=False, blocking=True, completionDelegate=None):
     proc, rc = self.ensure_control_master(node)
@@ -89,6 +93,7 @@ def ratester___call__(self, node, command, stdout=0, synchronous=1, silent=False
         return self.orig___call__(node, command, stdout, synchronous,
                                   silent, blocking, completionDelegate)
 
+
 def ratester_environment__setitem__(self, key, value):
     if key == "nodes":
         self.Nodes = []
@@ -98,13 +103,16 @@ def ratester_environment__setitem__(self, key, value):
     else:
         self.orig___setitem__(key, value)
 
+
 def ratester_is_node_booted(self, node):
     '''Return TRUE if the given node is booted (responds to pings)'''
     return RemoteFactory().getInstance()(node, "/bin/true", silent=True) == 0
 
+
 def monkey_patch_cts_log_watcher():
     # continue watching when a node gets unresponsive (fencing)
     LogWatcher._LogWatcher__get_lines = ratester___get_lines
+
 
 def monkey_patch_cts_remote_commands():
     # prevent deadlock with SSH + control master
@@ -115,9 +123,11 @@ def monkey_patch_cts_remote_commands():
     RemoteExec.__call__ = ratester___call__
     RemoteExec.call_async = ratester_call_async
 
+
 def monkey_patch_cts_env_node_setup():
     Environment.orig___setitem__ = Environment.__setitem__
     Environment.__setitem__ = ratester_environment__setitem__
+
 
 def monkey_patch_node_state():
     NodeStatus.IsNodeBooted = ratester_is_node_booted

@@ -45,6 +45,7 @@ from cts.environment  import EnvFactory
 # from racts.distrib    import get_distribution
 from racts.rapatterns import RATemplates
 
+
 class RATesterScenarioComponent(ScenarioComponent):
     '''Assertion-friendly base class for scenario setup/teardown.
     '''

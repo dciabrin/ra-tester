@@ -3,6 +3,7 @@ from cts.remote import RemoteFactory
 from racts.raaction import ActionMixin
 from .manager import PackageManager
 
+
 class Rpm(PackageManager, ActionMixin):
     def __init__(self, env, pkg_format, flavor):
         PackageManager.__init__(self, env, pkg_format, flavor)

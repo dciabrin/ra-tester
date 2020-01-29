@@ -31,6 +31,7 @@ from cts.CTSaudits import ClusterAudit, AuditList, LogAudit, FileAudit
 
 AllRAAuditClasses = [ ]
 
+
 class SHMAudit(ClusterAudit):
 
     def name(self):
@@ -68,6 +69,7 @@ class SHMAudit(ClusterAudit):
         return 1
 
 # AllRAAuditClasses.append(SHMAudit)
+
 
 # Replace CTS' FileAudit because we do not want reporting on
 # cluster-based warning such as "stale SHM"
