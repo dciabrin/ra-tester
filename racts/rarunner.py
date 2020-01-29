@@ -40,7 +40,7 @@ class RARunner(Sequence):
     def SetUp(self):
         # stop cluster if previously running, failure is not fatal
         for node in self.Env["nodes"]:
-            self.logger.log("destroy any existing cluster on node %s"%node)
+            self.logger.log("destroy any existing cluster on node %s" % node)
             self.rsh(node, "pcs cluster destroy")
             self.rsh(node, "systemctl stop pacemaker_remote")
             self.rsh(node, "systemctl disable pacemaker_remote")

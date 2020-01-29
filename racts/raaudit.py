@@ -29,7 +29,7 @@ Licensed under the GNU GPL.
 import sys, signal, time, os, re, string, subprocess, tempfile
 from cts.CTSaudits import ClusterAudit, AuditList, LogAudit, FileAudit
 
-AllRAAuditClasses = [ ]
+AllRAAuditClasses = []
 
 
 class SHMAudit(ClusterAudit):
@@ -64,7 +64,7 @@ class SHMAudit(ClusterAudit):
                 self.CM.debug("Skipping %s" % node)
 
         return result
-    
+
     def is_applicable(self):
         return 1
 

@@ -46,7 +46,7 @@ from racts.rascenario import RATesterScenarioComponent
 class RATesterFencingComponent(RATesterScenarioComponent):
     def get_user_name(self):
         return os.environ.get("USERNAME", os.environ.get("USER"))
-        
+
     def __init__(self, env):
         RATesterScenarioComponent.__init__(self, env)
         # we re-use the CTS' stonith-* params as configuration
@@ -55,7 +55,7 @@ class RATesterFencingComponent(RATesterScenarioComponent):
             self.Env["stonith-params"] = ""
         elif self.Env["stonith-type"] == "external/ssh":
             self.Env["stonith-type"] = "fence_virsh"
-            self.Env["stonith-params"] = "ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key "%self.get_user_name()
+            self.Env["stonith-params"] = "ipaddr=$(ip route | grep default | awk '{print $3}') secure=1 login=%s identity_file=/root/.ssh/fence-key " % self.get_user_name()
 
     def IsApplicable(self):
         return self.Env["stonith"] == True
@@ -64,9 +64,9 @@ class RATesterFencingComponent(RATesterScenarioComponent):
 class RATesterDefaultFencing(RATesterFencingComponent):
     def setup_scenario(self, cluster_manager):
         cluster_manager.log("Enabling fencing in cluster")
-        self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence %s %s action=reboot"%\
+        self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence %s %s action=reboot" % \
                        (self.Env["stonith-type"],
-                        self.Env["stonith-params"]) )
+                        self.Env["stonith-params"]))
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=true")
 
     def teardown_scenario(self, cluster_manager):

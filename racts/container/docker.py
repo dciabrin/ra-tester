@@ -24,7 +24,7 @@ class Docker(ContainerEngine, ActionMixin):
 
     def pull_image(self, nodes, img):
         for node in nodes:
-            self.rsh_check(node, "docker pull %s"%img)
+            self.rsh_check(node, "docker pull %s" % img)
 
     def errorstoignore(self):
         return [

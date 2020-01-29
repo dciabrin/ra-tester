@@ -35,7 +35,7 @@ from cts.CTS import NodeStatus
 
 
 def ratester___get_lines(self, timeout):
-    count=0
+    count = 0
     if not len(self.file_list):
         raise ValueError("No sources to read from")
 
@@ -50,8 +50,8 @@ def ratester___get_lines(self, timeout):
         if t.is_alive():
             self.debug("%s: %s did not returned after 8s." % (self.name, repr(t)))
             self.debug("%s: forgetting node %s." % (self.name, t.node))
-            self.hosts=[x for x in self.hosts if x != t.node]
-            self.file_list=[x for x in self.file_list if x.host != t.node]
+            self.hosts = [x for x in self.hosts if x != t.node]
+            self.file_list = [x for x in self.file_list if x.host != t.node]
 
 
 def ratester_ensure_control_master(self, node):
@@ -72,7 +72,7 @@ def ratester_ensure_control_master(self, node):
 def ratester_call_async(self, node, command, completionDelegate=None):
     proc, rc = self.ensure_control_master(node)
     if rc != 0:
-        self.debug("Connection check to %s failed. Node went inaccessible."%node)
+        self.debug("Connection check to %s failed. Node went inaccessible." % node)
         if completionDelegate:
             completionDelegate.async_complete(proc.pid, rc, [], [])
         return 0
@@ -83,7 +83,7 @@ def ratester_call_async(self, node, command, completionDelegate=None):
 def ratester___call__(self, node, command, stdout=0, synchronous=1, silent=False, blocking=True, completionDelegate=None):
     proc, rc = self.ensure_control_master(node)
     if rc != 0:
-        self.debug("Connection check to %s failed. Node went inaccessible."%node)
+        self.debug("Connection check to %s failed. Node went inaccessible." % node)
         if not synchronous:
             if completionDelegate:
                 completionDelegate.async_complete(proc.pid, rc, [], [])
