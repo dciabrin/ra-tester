@@ -45,10 +45,10 @@ from racts.ratest import ResourceAgentTest
 tests = []
 
 class DummyCommonTest(ResourceAgentTest):
-    def bundle_command(self, cluster_nodes, resource):
+    def bundle_command(self, cluster_nodes, config):
         engine = self.Env["distribution"].container_engine().package_name()
-        name = resource["name"]
-        image = resource["container_image"]
+        name = config["name"]
+        image = config["container_image"]
         return "pcs resource bundle create %s"\
             " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
@@ -56,7 +56,7 @@ class DummyCommonTest(ResourceAgentTest):
             " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"%\
             (name, engine, image)
 
-    def resource_command(self, cluster_nodes, resource):
+    def resource_command(self, cluster_nodes, config):
         return """pcs resource create dummy ocf:pacemaker:Dummy"""
 
     def setup_test(self, node):
@@ -81,7 +81,7 @@ class Start(DummyCommonTest):
 
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
-        rsc = self.Env["resource"]
+        rsc = self.Env["config"]
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
                                            self.resource_probe_pattern(rsc, n),
                                            n, 'not running') \
