@@ -17,6 +17,10 @@ class ClusterManager(ABC):
         pass
 
     @abstractmethod
+    def set_node_property(self, nodes, node, name, value):
+        pass
+
+    @abstractmethod
     def add_remote_node(self, cluster_nodes, node):
         pass
 
