@@ -62,7 +62,7 @@ class GaleraCommonTest(ResourceAgentTest):
             " storage-map id=map5 source-dir=/var/lib/mysql target-dir=/var/lib/mysql options=rw"\
             " storage-map id=map6 source-dir=/var/log/mysql target-dir=/var/log/mysql options=rw"%\
             (name, engine, image) + \
-            " storage-map id=map7 source-dir=/tls target-dir=/tls options=ro" if config["tls"] else ""
+            (" storage-map id=map7 source-dir=/tls target-dir=/tls options=ro" if config["tls"] else "")
 
     def resource_command(self, cluster_nodes, config):
         name = config["ocf_name"]
