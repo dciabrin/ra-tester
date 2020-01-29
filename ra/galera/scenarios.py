@@ -133,7 +133,9 @@ class PrepareCluster(RATesterScenarioComponent):
                                (killgdb,   "/tmp/kill-during-txn.gdb"),
                                (slowsst,   "/tmp/slow_down_sst.sh")],
                               True, "root", "0444", {
-                                  "%HOSTIP%": ip,
+                                  # mariadb 10.3.11 has a buggy galera with ipv6
+                                  # force listen to all interface
+                                  "%HOSTIP%": ip if not bool(config["ipv6"]) else "[::]",
                                   "%GCOMM%": gcomm,
                                   "%HOSTNAME%": shortname,
                                   "%GALERALIBPATH%": "/usr/lib64/galera/libgalera_smm.so",
