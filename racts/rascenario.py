@@ -178,7 +178,6 @@ class RATesterScenarioComponent(ScenarioComponent):
         assert res == expected, "%s: \"%s\" returned %d"%(self, command, res)
 
     def check_package_dependencies(self, target, pkgs):
-        if self.Env.has_key("skip_install_dependencies"): return
         # make sure a container runtime is available
         if self.Env["resource"].get("bundle", False):
             pkgs = pkgs+[self.container_engine.package_name()]
@@ -192,8 +191,10 @@ class RATesterScenarioComponent(ScenarioComponent):
 
     def setup_scenario(self, cluster_manager):
         # install package pre-requisites
-        for node in self.Env["nodes"]:
-            self.check_package_dependencies(node, self.dependencies)
+        if not self.Env.has_key("skip_install_dependencies"):
+            if self.verbose: self.log("[Installing/Updating dependencies]")
+            for node in self.Env["nodes"]:
+                self.check_package_dependencies(node, self.dependencies)
 
         # container setup
         if self.Env.has_key("bundle"):
