@@ -47,10 +47,10 @@ tests = []
 
 
 class GaleraCommonTest(ResourceAgentTest):
-    def bundle_command(self, cluster_nodes, resource):
+    def bundle_command(self, cluster_nodes, config):
         engine = self.Env["distribution"].container_engine().package_name()
-        name = resource["name"]
-        image = resource["container_image"]
+        name = config["name"]
+        image = config["container_image"]
         return "pcs resource bundle create %s"\
             " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " replicas=3 masters=3 run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
@@ -61,11 +61,12 @@ class GaleraCommonTest(ResourceAgentTest):
             " storage-map id=map4 source-dir=/etc/my.cnf.d target-dir=/etc/my.cnf.d options=ro"\
             " storage-map id=map5 source-dir=/var/lib/mysql target-dir=/var/lib/mysql options=rw"\
             " storage-map id=map6 source-dir=/var/log/mysql target-dir=/var/log/mysql options=rw"%\
-            (name, engine, image)
+            (name, engine, image) + \
+            " storage-map id=map7 source-dir=/tls target-dir=/tls options=ro" if config["tls"] else ""
 
-    def resource_command(self, cluster_nodes, resource):
-        name = resource["ocf_name"]
-        alt_names = resource["alt_node_names"]
+    def resource_command(self, cluster_nodes, config):
+        name = config["ocf_name"]
+        alt_names = config["alt_node_names"]
         if alt_names:
             nodes = ",".join([alt_names[n] for n in cluster_nodes])
             host_map = ";".join(["%s:%s"%(a,b) for a,b in alt_names.items()])
@@ -102,7 +103,7 @@ class GaleraCommonTest(ResourceAgentTest):
             r"notice:\s.*galera_monitor_.*:.*\s\[\sERROR\s.*\s\(HY000\): Lost\sconnection\sto\sMySQL\sserver"
         ]
 
-    
+
 # class GaleraTest(ResourceAgentTest):
 #     '''Base class for galera tests.
 #     Setup creates a galera resource, unstarted (target-state:disabled)
@@ -215,23 +216,23 @@ class ClusterStart(GaleraCommonTest):
         # setup_test has created the inactive resource
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
-        resource=self.Env["resource"]
+        config=self.Env["config"]
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
-                                           self.resource_probe_pattern(resource, n),
+                                           self.resource_probe_pattern(config, n),
                                            n, 'not running') \
                     for n in self.Env["nodes"]]
         watch = self.make_watch(patterns)
-        self.rsh_check(self.Env["nodes"][0], "pcs resource refresh %s"%resource["name"])
+        self.rsh_check(self.Env["nodes"][0], "pcs resource refresh %s"%config["name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
         # bundles run OCF resources on bundle nodes, not host nodes
-        name = resource["ocf_name"]
-        target_nodes = self.resource_target_nodes(resource, self.Env["nodes"])
+        name = config["ocf_name"]
+        target_nodes = self.resource_target_nodes(config, self.Env["nodes"])
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", name, n, 'ok') \
                     for n in target_nodes]
         watch = self.make_watch(patterns)
-        self.rsh_check(self.Env["nodes"][0], "pcs resource enable %s"%resource["name"])
+        self.rsh_check(self.Env["nodes"][0], "pcs resource enable %s"%config["name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
@@ -248,15 +249,15 @@ class ClusterStop(ClusterStart):
     def test(self, dummy):
         # start cluster
         ClusterStart.test(self,dummy)
-
+        config=self.Env["config"]
         target_nodes=self.Env["nodes"]
         ## bundles run resources on container nodes, not host nodes
-        if self.Env["galera_bundle"]:
+        if config["bundle"]:
             target_nodes=["galera-bundle-%d"%x for x in range(len(self.Env["nodes"]))]
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "stop", "galera", n, 'ok') \
                     for n in target_nodes]
         watch = self.make_watch(patterns)
-        self.rsh_check(self.Env["nodes"][0], "pcs resource disable %s"%self.Env["galera_rsc_name"])
+        self.rsh_check(self.Env["nodes"][0], "pcs resource disable %s"%config["name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
@@ -306,7 +307,7 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
 
     def is_applicable(self):
         # mariadb 10.1+ seems to be immune to pending XA
-       return False 
+       return False
        # res=self.rsh(self.Env["nodes"][0],
        #                  "mysql --version | awk '{print $5}' | awk -F. '$1==5 && $2==5 {print 1}' | grep 1") == 0
 
@@ -370,7 +371,7 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
         # return self.rsh(self.Env["nodes"][0],
         #                 "mysql --version | awk '{print $5}' | awk -F. '$1==5 && $2==5 {print 1}' | grep 1") == 0
         return False
-    
+
     def test(self, target):
         all_nodes = self.Env["nodes"]
 

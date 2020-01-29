@@ -42,6 +42,7 @@ from cts.environment import EnvFactory
 from racts.rascenario import RATesterScenarioComponent
 
 from ra.galera.scenarios import PrepareCluster
+from racts.raconfig import RAConfig
 
 scenarios = {}
 
@@ -178,7 +179,7 @@ scenarios = {}
 
 class GarbdPrepareCluster(PrepareCluster):
     def __init__(self, environment):
-        RATesterScenarioComponent.__init__(self, environment)
+        RATesterScenarioComponent.__init__(self, environment, scenario_module_name="garbd")
         self.dependencies = ["mariadb-server-galera"]
         
     def setup_scenario(self, cm):
@@ -196,35 +197,44 @@ class GarbdPrepareCluster(PrepareCluster):
     def setup_new_cluster(self, cluster_manager):
         PrepareCluster.setup_new_cluster(self, cluster_manager)
         self.cluster_manager.add_remote_node(self.Env["clusters"][0], self.Env["arb"])
-        node = self.Env["clusters"][0][0]
-        for n in self.Env["clusters"][0]:
-            self.rsh_check(node, "pcs property set --node %s osprole=galera"%n)
-        self.rsh_check(node, "pcs property set --node %s osprole=garbd"%self.Env["arb"])
+        nodes = self.Env["clusters"][0]
+        for n in nodes:
+            self.cluster_manager.set_node_property(nodes, n, "osprole", "galera")
+        self.cluster_manager.set_node_property(nodes, self.Env["arb"], "osprole", "garbd")
 
 
             
 class SimpleSetup(GarbdPrepareCluster):
 
     def setup_scenario(self, cm):
-        GarbdPrepareCluster.setup_scenario(cm)
+        GarbdPrepareCluster.setup_scenario(self, cm)
+        cluster = self.cluster_manager
         self.Env["rsc_name"] = "galera-master"
         self.Env["rsc_ocf_name"] = "galera"
         self.Env["rsc_meta"] = "master-max=2 --master"
         self.Env["galera_user"] = "mysql"
-        self.Env["resource"] = {
-            "name":"galera-master",
+        config = RAConfig(self.Env, "garbd", {
+            "name": cluster.meta_promotable_resource_name("galera"),
             "ocf_name":"galera",
-            "meta":"master-max=2 --master",
+            "meta": cluster.meta_promotable_config(len(self.Env["nodes"])),
             "user":"mysql",
-            "bundle": None
-            }
-        self.Env["resource-garbd"] = {
+            "bundle": None,
+            "skip_install_db": False,
+            "tls": False,
+            "ipv6": False,
+            })
+        self.Env["config"] = config
+        config_garbd = RAConfig(self.Env, "garbd", {
             "name":"garbd",
             "ocf_name":"garbd",
             "meta": None,
             "bundle": None,
-            "user":"mysql"
-            }
+            "user":"mysql",
+            "skip_install_db": False,
+            "tls": False,
+            "ipv6": False,
+            })
+        self.Env["config-garbd"] = config_garbd
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]

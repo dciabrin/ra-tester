@@ -42,9 +42,9 @@ from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
+from racts.raconfig import RAConfig
 
 
-                
 # class GaleraSetupMixin(object):
 #     def mysql_etc_dir(self):
 #         target_dir = self.get_candidate_path(["/etc/my.cnf.d", "/etc/mysql/conf.d"],
@@ -91,11 +91,11 @@ scenarios = {}
 
 class PrepareCluster(RATesterScenarioComponent):
     def __init__(self, environment):
-        RATesterScenarioComponent.__init__(self, environment)
+        RATesterScenarioComponent.__init__(self, environment, scenario_module_name="galera")
         self.dependencies = ["mariadb-server-galera"]
 
     def setup_configs(self, cluster_nodes):
-        resource = self.Env["resource"]
+        config = self.Env["config"]
 
         self.log("Setting up galera config files")
         basedir=os.path.dirname(os.path.abspath(__file__))
@@ -103,7 +103,7 @@ class PrepareCluster(RATesterScenarioComponent):
         galeracfg=os.path.join(configdir, "galera.cnf.in")
         killgdb=os.path.join(configdir, "kill-during-txn.gdb")
         slowsst=os.path.join(configdir, "slow_down_sst.sh")
-        if resource["TLS"]:
+        if bool(config["tls"]):
             tlstunnel="[sst]\ntca=/tls/all-mysql.crt\ntcert=/tls/mysql.pem\nsockopt=\"verify=1\""
             tls="socket.ssl_key=/tls/mysql.key;socket.ssl_cert=/tls/mysql.crt;socket.ssl_ca=/tls/all-mysql.crt;"
             rsync="rsync_tunnel"
@@ -111,20 +111,20 @@ class PrepareCluster(RATesterScenarioComponent):
             tlstunnel=""
             tls=""
             rsync="rsync"
-        if self.Env.has_key("use_ipv6"):
+        if bool(config["ipv6"]):
             gcomm="gcomm://"+(",".join([self.node_fqdn_ipv6(n) for n in cluster_nodes]))
-        elif resource["TLS"]:
+        elif bool(config["tls"]):
             gcomm="gcomm://"+(",".join([self.node_fqdn(n) for n in cluster_nodes]))
         else:
             gcomm="gcomm://"+(",".join(cluster_nodes))
 
         for node in cluster_nodes:
-            if self.Env.has_key("use_ipv6"):
+            if bool(config["ipv6"]):
                 ip = "["+self.node_ipv6(node)+"]"
                 shortname = self.node_fqdn_ipv6(node)
             else:
                 ip = self.node_ip(node)
-                if resource["TLS"]:
+                if bool(config["tls"]):
                     shortname = self.node_fqdn(node)
                 else:
                     shortname = self.node_shortname(node)
@@ -141,10 +141,10 @@ class PrepareCluster(RATesterScenarioComponent):
                                   "%RSYNC%": rsync,
                                   "%TLSTUNNEL%": tlstunnel
                               })
-        if resource["TLS"]:
+        if bool(config["tls"]):
             self.log("Generating certificates for TLS")
             for node in cluster_nodes:
-                if self.Env.has_key("use_ipv6"):
+                if bool(config["ipv6"]):
                     ca_node = self.node_fqdn_ipv6(node)
                 else:
                     ca_node = self.node_fqdn(node)
@@ -154,7 +154,7 @@ class PrepareCluster(RATesterScenarioComponent):
                                " -subj \"/CN=%s\" -out /tls/mysql.crt -batch"%ca_node)
                 self.rsh_check(node, "sh -c 'cat /tls/mysql.key /tls/mysql.crt > /tls/mysql.pem'")
             self.log("Generating a common CA file for TLS")
-            if self.Env["use_ipv6"]:
+            if bool(config["ipv6"]):
                 ca_nodes = " ".join([self.node_fqdn_ipv6(n) for n in cluster_nodes])
             else:
                 ca_nodes = " ".join([self.node_fqdn(n) for n in cluster_nodes])
@@ -164,20 +164,20 @@ class PrepareCluster(RATesterScenarioComponent):
                                ca_nodes)
             for node in cluster_nodes:
                 self.rsh(node, "chown -R %s:%s /tls"%\
-                         (resource["user"],resource["user"]))
+                         (config["user"],config["user"]))
 
     def setup_state(self, cluster_nodes):
-        resource=self.Env["resource"]
+        config=self.Env["config"]
         for node in cluster_nodes:
             # blank galera state on disk
-            if not self.Env.has_key("galera_skip_install_db"):
+            if not bool(config["skip_install_db"]):
                 self.log("recreating empty mysql database on node %s"%node)
                 self.rsh(node, "rm -rf /var/lib/mysql /var/log/mysql")
                 self.rsh(node, "mkdir -p /var/lib/mysql /var/log/mysql")
                 self.rsh(node, "sudo mysql_install_db")
             self.rsh(node, "chown -R %s:%s /var/log/mysql /var/lib/mysql"%\
-                     (resource["user"],resource["user"]))
-            if self.Env["resource"].get("bundle", False):
+                     (config["user"],config["user"]))
+            if bool(self.Env["config"]["bundle"]):
                 self.rsh(node, "which chcon && chcon -R -t container_file_t /var/lib/mysql /var/log/mysql")
             else:
                 self.rsh(node, "which restorecon && restorecon -R /var/lib/mysql /var/log/mysql")
@@ -189,20 +189,22 @@ class SimpleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
         cluster = self.cluster_manager
-        resource = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": cluster.meta_promotable_resource_name("galera"),
             "ocf_name": "galera",
             "alt_node_names": {},
             "meta": cluster.meta_promotable_config(len(self.Env["nodes"])),
             "user": "mysql",
             "bundle": None,
-            "TLS": False
-        }
-        if self.Env.has_key("use_ipv6"):
+            "skip_install_db": False,
+            "tls": False,
+            "ipv6": False,
+        })
+        if bool(config["ipv6"]):
             nodes = self.Env["nodes"]
             nodes_fqdn_ipv6 = [self.node_fqdn_ipv6(n) for n in nodes]
-            resource["alt_node_names"] = dict(zip(nodes,nodes_fqdn_ipv6))
-        self.Env["resource"] = resource
+            config["alt_node_names"] = dict(zip(nodes,nodes_fqdn_ipv6))
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]
@@ -211,22 +213,24 @@ scenarios["SimpleSetup"]=[SimpleSetup]
 class BundleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        resource = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": "galera-bundle",
             "ocf_name": "galera",
             "alt_node_names": {},
             "meta": "container-attribute-target=host notify=true",
             "user": "42434",
             "bundle": True,
-            "container_image": self.Env["galera_container_image"] or \
-                "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo",
-            "TLS": False
-        }
-        if self.Env.has_key("use_ipv6"):
+            "container_image": "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo",
+            "skip_install_db": False,
+            "tls": False,
+            "ipv6": False,
+        })
+        if bool(config["ipv6"]):
             nodes = self.Env["nodes"]
             nodes_fqdn_ipv6 = [self.node_fqdn_ipv6(n) for n in nodes]
-            resource["alt_node_names"] = zip(nodes,nodes_fqdn_ipv6)
-        self.Env["resource"] = resource
+            # TODO implement setting config key name with prefix?
+            config["alt_node_names"] = dict(zip(nodes,nodes_fqdn_ipv6))
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["BundleSetup"]=[BundleSetup]
@@ -236,22 +240,24 @@ class TLSSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
         cluster = self.cluster_manager
-        resource = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": cluster.meta_promotable_resource_name("galera"),
             "ocf_name": "galera",
             "alt_node_names": {},
             "meta": cluster.meta_promotable_config(len(self.Env["nodes"])),
             "user": "mysql",
             "bundle": None,
-            "TLS": True
-        }
+            "skip_install_db": False,
+            "tls": True,
+            "ipv6": False,
+        })
         nodes = self.Env["nodes"]
-        if self.Env.has_key("use_ipv6"):
+        if bool(config["ipv6"]):
             ca_nodes = [self.node_fqdn_ipv6(n) for n in nodes]
         else:
             ca_nodes = [self.node_fqdn(n) for n in nodes]
-        resource["alt_node_names"] = dict(zip(nodes,ca_nodes))
-        self.Env["resource"] = resource
+        config["alt_node_names"] = dict(zip(nodes,ca_nodes))
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["TLSSetup"]=[TLSSetup]

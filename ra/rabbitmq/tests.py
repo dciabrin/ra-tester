@@ -45,10 +45,10 @@ from racts.ratest import ResourceAgentTest
 tests = []
 
 class RabbitMQCommonTest(ResourceAgentTest):
-    def bundle_command(self, cluster_nodes, resource):
+    def bundle_command(self, cluster_nodes, config):
         engine = self.Env["container_engine"]
-        name = resource["name"]
-        image = resource["container_image"]
+        name = config["name"]
+        image = config["container_image"]
         return "pcs resource bundle create %s"\
             " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " replicas=3 run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
@@ -62,8 +62,8 @@ class RabbitMQCommonTest(ResourceAgentTest):
             " storage-map id=map7 source-dir=/usr/lib/ocf target-dir=/usr/lib/ocf options=rw"%\
             (name, engine, image)
 
-    def resource_command(self, cluster_nodes, resource):
-        name = resource["ocf_name"]
+    def resource_command(self, cluster_nodes, config):
+        name = config["ocf_name"]
         return """pcs resource create %s ocf:heartbeat:rabbitmq-cluster set_policy='ha-all ^(?!amq\\.).* {"ha-mode":"all"}' op stop interval=0s timeout=200s"""%name
 
     def setup_test(self, node):
@@ -87,13 +87,13 @@ class ClusterStart(RabbitMQCommonTest):
 
     def test(self, target):
         # setup_test has created the inactive resource
-        rsc = self.resource
-        name = rsc["name"]
-        ocf_name = rsc["ocf_name"]
+        config = self.config
+        name = config["name"]
+        ocf_name = config["ocf_name"]
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
-                                           self.resource_probe_pattern(rsc, n),
+                                           self.resource_probe_pattern(config, n),
                                            n, 'not running') \
                     for n in self.Env["nodes"]]
         watch = self.make_watch(patterns)
@@ -102,7 +102,7 @@ class ClusterStart(RabbitMQCommonTest):
         assert not watch.unmatched, watch.unmatched
 
         # bundles run OCF resources on bundle nodes, not host nodes
-        target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
+        target_nodes = self.resource_target_nodes(config, self.Env["nodes"])
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", ocf_name, n, 'ok') \
                     for n in target_nodes]
         watch = self.make_watch(patterns)
@@ -126,9 +126,9 @@ class ClusterRebootAllNodes(ClusterStart):
         ClusterStart.test(self, target)
 
         # restart all the nodes forcibly
-        rsc = self.resource
-        name = rsc["name"]
-        target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
+        config = self.config
+        name = config["name"]
+        target_nodes = self.resource_target_nodes(config, self.Env["nodes"])
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok') \
                     for n in target_nodes]
         watch = self.make_watch(patterns)
