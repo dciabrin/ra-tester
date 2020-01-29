@@ -21,4 +21,7 @@ class ContainerEngine(object):
     def pull_image(self, nodes, img):
         pass
 
+    @abstractmethod
+    def errorstoignore(self):
+        pass
 

@@ -353,7 +353,7 @@ prepare_base_image()
     # ensure lp#1577982 is fixed otherwise cloud-init fail to assign ip properly
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
         --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/site-packages/cloudinit/sources/DataSourceNoCloud.py" \
-	--install $(distro_pkg lsb-core)
+	--install $(distro_pkg lsb-core),crudini
 
     if [ $CLUSTERPKGS -eq 1 ]; then
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
