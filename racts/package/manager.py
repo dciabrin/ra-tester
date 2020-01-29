@@ -36,13 +36,13 @@ class PackageManager(ABC):
         return r
 
     def is_installed(self, node, pkg):
-        self._is_installed(node, self.map_package_name(pkg))
+        return self._is_installed(node, self.map_package_name(pkg))
 
     def install(self, node, pkg):
-        self._install(node, self.map_package_name(pkg))
+        return self._install(node, self.map_package_name(pkg))
 
     def can_be_updated(self, node, pkg):
-        self._can_be_updated(node, self.map_package_name(pkg))
+        return self._can_be_updated(node, self.map_package_name(pkg))
 
     def update(self, node, pkg):
-        self._update(node, self.map_package_name(pkg))
+        return self._update(node, self.map_package_name(pkg))
