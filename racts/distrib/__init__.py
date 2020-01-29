@@ -14,7 +14,7 @@ def autodetect_distribution(env):
     rsh = RemoteFactory().getInstance()
     # TODO allow rsh to output multiple lines
     output = rsh(env["nodes"][0], "lsb_release -a | tr '\n' '|'", stdout=1)
-    values = [s.split(":",1) for s in output.rstrip("\n|").split("|")]
+    values = [s.split(":", 1) for s in output.rstrip("\n|").split("|")]
     info = dict([[s.strip() for s in v] for v in values])
     manager = False
     if info["Distributor ID"].startswith("RedHatEnterprise"):
