@@ -39,9 +39,10 @@ from cts.logging      import LogFactory
 from cts.remote       import RemoteFactory
 from cts.watcher      import LogWatcher
 from cts.environment  import EnvFactory
-from racts.cluster    import get_cluster_manager
-from racts.package    import get_package_manager
-from racts.container  import get_container_engine
+# from racts.cluster    import get_cluster_manager
+# from racts.package    import get_package_manager
+# from racts.container  import get_container_engine
+# from racts.distrib    import get_distribution
 from racts.rapatterns import RATemplates
 
 class RATesterScenarioComponent(ScenarioComponent):
@@ -52,9 +53,10 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger = LogFactory()
         self.Env = environment
         self.verbose = bool(self.Env["verbose"])
-        self.cluster_manager = get_cluster_manager(self.Env)
-        self.package_manager = get_package_manager(self.Env)
-        self.container_engine = get_container_engine(self.Env)
+        self.distribution = self.Env["distribution"]
+        self.cluster_manager = self.distribution.cluster_manager()
+        self.package_manager = self.distribution.package_manager()
+        self.container_engine = self.distribution.container_engine()
         self.ratemplates = RATemplates()
         self.dependencies = []
 
@@ -181,15 +183,12 @@ class RATesterScenarioComponent(ScenarioComponent):
         if self.Env.has_key("bundle"):
             pkgs = pkgs+[self.container_engine.package_name()]
 
-        pkg_manager = self.Env["package_manager"]
         for p in pkgs:
-            if not pkg_manager.is_installed(target, p):
-                if self.verbose: self.log("[Installing prerequisite %s on %s]"%(p, target))
-                pkg_manager.install(target, p)
+            if not self.package_manager.is_installed(target, p):
+                self.package_manager.install(target, p)
             else:
-                if not pkg_manager.can_be_updated(target, p):
-                    if self.verbose: self.log("[Updating prerequisite %s on %s]"%(p, target))
-                    pkg_manager.update(target, p)
+                if self.package_manager.can_be_updated(target, p):
+                    self.package_manager.update(target, p)
 
     def setup_scenario(self, cluster_manager):
         # install package pre-requisites

@@ -88,7 +88,7 @@ class ResourceAgentTest(CTSTest, ActionMixin):
     def resource_probe_pattern(self, resource, node):
         pattern = resource["ocf_name"]
         if resource["bundle"]:
-            pattern+='-bundle-%s-[0-9]'%self.Env["container_engine"]
+            pattern+='-bundle-%s-[0-9]'%self.Env["distribution"].container_engine().package_name()
         return pattern
 
     def resource_target_nodes(self, resource, cluster):

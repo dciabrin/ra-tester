@@ -46,7 +46,7 @@ tests = []
 
 class DummyCommonTest(ResourceAgentTest):
     def bundle_command(self, cluster_nodes, resource):
-        engine = self.Env["container_engine"]
+        engine = self.Env["distribution"].container_engine().package_name()
         name = resource["name"]
         image = resource["container_image"]
         return "pcs resource bundle create %s"\
