@@ -24,7 +24,7 @@ class Podman(ContainerEngine, ActionMixin):
 
     def pull_image(self, nodes, img):
         for node in nodes:
-            self.rsh_check(node, "podman pull %s"%img)
+            self.rsh_check(node, "podman pull %s" % img)
 
     def errorstoignore(self):
         return []

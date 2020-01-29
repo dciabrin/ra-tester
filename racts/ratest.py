@@ -76,7 +76,7 @@ class ResourceAgentTest(CTSTest, ActionMixin):
     @property
     def config(self):
         return self.Env["config"]
-        
+
     def teardown(self, node):
         '''Teardown, cleanup resource after the test'''
         try:
@@ -88,13 +88,13 @@ class ResourceAgentTest(CTSTest, ActionMixin):
     def resource_probe_pattern(self, config, node):
         pattern = config["ocf_name"]
         if config["bundle"]:
-            pattern+='-bundle-%s-[0-9]'%self.Env["distribution"].container_engine().package_name()
+            pattern += '-bundle-%s-[0-9]' % self.Env["distribution"].container_engine().package_name()
         return pattern
 
     def resource_target_nodes(self, config, cluster):
         name = config["ocf_name"]
         if config["bundle"]:
-            target_nodes = ["%s-bundle-%d"%(name, x) for x in range(len(cluster))]
+            target_nodes = ["%s-bundle-%d" % (name, x) for x in range(len(cluster))]
         else:
             target_nodes = cluster
         return target_nodes
@@ -123,12 +123,12 @@ class ResourceAgentTest(CTSTest, ActionMixin):
             bundle_cmd += " storage-map id=pcmk1 source-dir=/var/log/pacemaker target-dir=/var/log/pacemaker options=rw"
             bundle_cmd += " --disabled"
             self.rsh_check(node, bundle_cmd)
-            meta += " bundle %s"%config["name"]
+            meta += " bundle %s" % config["name"]
 
         # create the resource, set it disabled if it is not
         # running in a bundle
         resource_cmd = self.resource_command(cluster_nodes, config)
-        if meta != "": resource_cmd += " meta %s"%meta
+        if meta != "": resource_cmd += " meta %s" % meta
         if not config["bundle"]: resource_cmd += " --disabled"
         self.rsh_check(node, resource_cmd)
 
@@ -146,12 +146,12 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         node = cluster_nodes[0]
 
         # give back control to pacemaker in case the test disabled it
-        self.rsh_check(node, "pcs resource manage %s"%config["name"])
+        self.rsh_check(node, "pcs resource manage %s" % config["name"])
 
         # delete the resource created for this test
         # note: deleting a resource triggers an implicit stop, and that
         # implicit delete will fail when ban constraints are set.
-        self.rsh_check(node, "pcs resource delete %s"%config["name"])
+        self.rsh_check(node, "pcs resource delete %s" % config["name"])
 
     def errorstoignore(self):
         container_logs = self.Env["distribution"].container_engine().errorstoignore()
