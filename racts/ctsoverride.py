@@ -27,7 +27,7 @@ Licensed under the GNU GPL.
 
 
 import sys, signal, time, os, re, string, subprocess, tempfile
-from subprocess import Popen,PIPE
+from subprocess import Popen, PIPE
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 from cts.watcher   import LogWatcher
 from cts.environment import Environment

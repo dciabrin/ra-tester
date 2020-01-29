@@ -12,7 +12,7 @@ Licensed under the GNU GPL.
 
 def RAConfig(env, setting_prefix, settings):
     config = {}
-    for k,v in settings.items():
+    for k, v in settings.items():
         fullk = setting_prefix+":"+k
         if env.has_key(fullk):
             config[k] = env[fullk]
