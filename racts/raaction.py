@@ -33,29 +33,29 @@ class ActionMixin(object):
     def crm_attr_set(self, target, attribute, value, expected = 0):
         command="crm_attribute -N %s -l reboot --name %s -v %s"% \
                      (target, attribute, value)
-        if self.verbose: self.logger.log("> [%s] %s"%(target,command))
+        if self.verbose: self.logger.log("> [%s] %s"%(target, command))
         res=self.rsh(target, command+" &>/dev/null")
         assert res == expected, "set crm attribute \"%s\" returned %d (expected %d)"% \
-            (attribute,res,expected)
+            (attribute, res, expected)
 
     def crm_attr_check(self, target, attribute, expected = 0, expected_value = 0):
         command="crm_attribute -N %s -l reboot --name %s -Q"% \
                      (target, attribute)
-        if self.verbose: self.logger.log("> [%s] %s"%(target,command))
+        if self.verbose: self.logger.log("> [%s] %s"%(target, command))
         res=self.rsh(target, command+" &>/dev/null")
         assert res == expected, "get crm attribute \"%s\" returned %d (expected %d)"% \
-            (attribute,res,expected)
+            (attribute, res, expected)
 
     def crm_attr_del(self, target, attribute, expected = 0, expected_value = 0):
         command="crm_attribute -N %s -l reboot --name %s -D"% \
                      (target, attribute)
-        if self.verbose: self.logger.log("> [%s] %s"%(target,command))
+        if self.verbose: self.logger.log("> [%s] %s"%(target, command))
         res=self.rsh(target, command+" &>/dev/null")
         assert res == expected, "del crm attribute \"%s\" returned %d (expected %d)"% \
-            (attribute,res,expected)
+            (attribute, res, expected)
 
     def rsh_check(self, target, command, expected = 0):
-        if self.verbose: self.logger.log("> [%s] %s"%(target,command))
+        if self.verbose: self.logger.log("> [%s] %s"%(target, command))
         temp="ratester-tmp%f"%time.time()
         res=self.rsh(target, command+" &>"+temp)
         if res != expected:
@@ -63,7 +63,7 @@ class ActionMixin(object):
             self.rsh(target, "mv %s '%s-%s-%d'"%(temp, temp, command, res))
         else:
             self.rsh(target, "rm -f %s"%temp)
-        assert res == expected, "\"%s\" returned %d"%(command,res)
+        assert res == expected, "\"%s\" returned %d"%(command, res)
 
     def rsh_bg(self, target, command, expected = 0):
         # TODO: multiple bg jobs per target
@@ -71,10 +71,10 @@ class ActionMixin(object):
         #     self.rsh_check(target, "screen -S %s -d -m"%self.name)
         #     self.bg[target]=True
         # self.rsh_check(target, "screen -S %s -X stuff '%s\r'"%(self.name,command) )
-        self.rsh_check(target, "screen -S %s -d -m %s"%(self.name,command) )
+        self.rsh_check(target, "screen -S %s -d -m %s"%(self.name, command) )
 
     def rsh_until(self, targets, command, timeout=1000, expected = 0):
-        if self.verbose: self.logger.log("> [%s] %s -> UNTIL $? == %d"%(",".join(targets),command, expected))
+        if self.verbose: self.logger.log("> [%s] %s -> UNTIL $? == %d"%(",".join(targets), command, expected))
         while timeout > 0:
             for t in targets:
                 res=self.rsh(t, command)

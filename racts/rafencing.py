@@ -45,7 +45,7 @@ from racts.rascenario import RATesterScenarioComponent
 
 class RATesterFencingComponent(RATesterScenarioComponent):
     def get_user_name(self):
-        return os.environ.get("USERNAME",os.environ.get("USER"))
+        return os.environ.get("USERNAME", os.environ.get("USER"))
         
     def __init__(self, env):
         RATesterScenarioComponent.__init__(self, env)

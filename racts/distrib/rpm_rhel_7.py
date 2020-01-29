@@ -27,5 +27,5 @@ class RpmRHEL7(Distribution, ActionMixin):
 
     def add_insecure_container_registry(self, node, uri):
         res = self.rsh(node,
-                       "if grep -v -w '%s' /etc/containers/registries.conf; then (echo -e \"[registries.insecure]\nregistries = ['%s']\" | crudini --merge /etc/containers/registries.conf registries.insecure); systemctl restart registries docker; fi" % (uri,uri))
+                       "if grep -v -w '%s' /etc/containers/registries.conf; then (echo -e \"[registries.insecure]\nregistries = ['%s']\" | crudini --merge /etc/containers/registries.conf registries.insecure); systemctl restart registries docker; fi" % (uri, uri))
         return res == 0

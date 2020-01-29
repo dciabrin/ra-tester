@@ -81,7 +81,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         if nodes == False:
             nodes = self.Env["nodes"]
         for node in self.Env["nodes"]:
-            for localfile,remotefile in files:
+            for localfile, remotefile in files:
                 if create_dir:
                     remotedir=os.path.dirname(remotefile)
                     rc = self.rsh(node, "mkdir -p %s" % remotedir)
@@ -89,8 +89,8 @@ class RATesterScenarioComponent(ScenarioComponent):
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
                 with tempfile.NamedTemporaryFile() as tmp:
                     if template:
-                        with open(src,"r") as f: template=f.read()
-                        tmp.write(template.replace("{{node}}",self.node_fqdn(node)))
+                        with open(src, "r") as f: template=f.read()
+                        tmp.write(template.replace("{{node}}", self.node_fqdn(node)))
                         tmp.flush()
                         cpsrc=tmp.name
                     else:
@@ -105,7 +105,7 @@ class RATesterScenarioComponent(ScenarioComponent):
                         assert rc == 0, "change permission of \"%s\" on remote node \"%s\"" % (src, node)
 
     def copy_to_node(self, node, files, create_dir=False, owner=False, perm=False, template=False):
-        for localfile,remotefile in files:
+        for localfile, remotefile in files:
             if create_dir:
                 remotedir=os.path.dirname(remotefile)
                 rc = self.rsh(node, "mkdir -p %s" % remotedir)
@@ -113,12 +113,12 @@ class RATesterScenarioComponent(ScenarioComponent):
             src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
             with tempfile.NamedTemporaryFile(mode='w') as tmp:
                 if template:
-                    with open(src,"r") as f: lines=f.readlines()
+                    with open(src, "r") as f: lines=f.readlines()
                     for line in lines:
                         tmpstr = line
-                        for k,v in template.items():
+                        for k, v in template.items():
                             if k in tmpstr:
-                                tmpstr = tmpstr.replace(k,v)
+                                tmpstr = tmpstr.replace(k, v)
                         tmp.write(tmpstr)
                     tmp.flush()
                     cpsrc=tmp.name
@@ -150,7 +150,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             return 1
         except AssertionError as e:
             print("Setup of scenario %s failed: %s"%\
-                  (self.__class__.__name__,str(e)))
+                  (self.__class__.__name__, str(e)))
         return 0
 
     def TearDown(self, cluster_manager):
@@ -159,7 +159,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             return 1
         except AssertionError as e:
             print("Teardown of scenario %s failed: %s"%\
-                  (self.__class__.__name__,str(e)))
+                  (self.__class__.__name__, str(e)))
         return 0
 
     def log(self, args):
@@ -169,7 +169,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger.debug(args)
 
     def rsh_check(self, target, command, expected = 0):
-        if self.verbose: self.logger.log("> [%s] %s"%(target,command))
+        if self.verbose: self.logger.log("> [%s] %s"%(target, command))
         temp="ratester-tmp%f"%time.time()
         res=self.rsh(target, command+" &>"+temp)
         if res != expected:
@@ -282,7 +282,7 @@ class RATesterScenarioComponent(ScenarioComponent):
                 # no longer true with pacemaker 1.1.18 and resource refresh
                 # patterns = [r"(crmd|pacemaker-controld).*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
                 #         for n in self.Env["nodes"]]
-                resource_pattern = re.sub(r'-(master|clone|bundle)','',res_name)
+                resource_pattern = re.sub(r'-(master|clone|bundle)', '', res_name)
                 if self.Env["bundle"]:
                     resource_pattern+='-bundle-%s-[0-9]'%self.Env["container_engine"]
 

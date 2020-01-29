@@ -47,7 +47,7 @@ from racts.raaction import ActionMixin
 class ResourceAgentTest(CTSTest, ActionMixin):
     '''Assertion-friendly base class for resource agent tests'''
     def __init__(self, cm):
-        CTSTest.__init__(self,cm)
+        CTSTest.__init__(self, cm)
         # self.start_cluster = False
         self.name = "GenericRATest"
         self.bg = {}
