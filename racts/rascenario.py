@@ -63,19 +63,19 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.dependencies = []
 
     def node_fqdn(self, node):
-        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $3;exit}'"%node, stdout=1).strip()
+        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $3;exit}'" % node, stdout=1).strip()
 
     def node_fqdn_ipv6(self, node):
-        return self.rsh(node, "getent ahosts %s.v6 | awk '/STREAM/ {print $3;exit}'"%node, stdout=1).strip()
+        return self.rsh(node, "getent ahosts %s.v6 | awk '/STREAM/ {print $3;exit}'" % node, stdout=1).strip()
 
     def node_shortname(self, node):
         return self.rsh(node, "hostname", stdout=1).strip()
 
     def node_ip(self, node):
-        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $1;exit}'"%node, stdout=1).strip()
+        return self.rsh(node, "getent ahosts %s | awk '/STREAM/ {print $1;exit}'" % node, stdout=1).strip()
 
     def node_ipv6(self, node):
-        return self.rsh(node, "getent ahosts %s.v6 | awk '/STREAM/ {print $1;exit}'"%node, stdout=1).strip()
+        return self.rsh(node, "getent ahosts %s.v6 | awk '/STREAM/ {print $1;exit}'" % node, stdout=1).strip()
 
     def copy_to_nodes(self, files, create_dir=False, owner=False, perm=False, template=False, nodes=False):
         if nodes == False:
@@ -83,18 +83,18 @@ class RATesterScenarioComponent(ScenarioComponent):
         for node in self.Env["nodes"]:
             for localfile, remotefile in files:
                 if create_dir:
-                    remotedir=os.path.dirname(remotefile)
+                    remotedir = os.path.dirname(remotefile)
                     rc = self.rsh(node, "mkdir -p %s" % remotedir)
                     assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
                 with tempfile.NamedTemporaryFile() as tmp:
                     if template:
-                        with open(src, "r") as f: template=f.read()
+                        with open(src, "r") as f: template = f.read()
                         tmp.write(template.replace("{{node}}", self.node_fqdn(node)))
                         tmp.flush()
-                        cpsrc=tmp.name
+                        cpsrc = tmp.name
                     else:
-                        cpsrc=src
+                        cpsrc = src
                     rc = self.rsh.cp(cpsrc, "root@%s:%s" % (node, remotefile))
                     assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
                     if owner:
@@ -107,13 +107,13 @@ class RATesterScenarioComponent(ScenarioComponent):
     def copy_to_node(self, node, files, create_dir=False, owner=False, perm=False, template=False):
         for localfile, remotefile in files:
             if create_dir:
-                remotedir=os.path.dirname(remotefile)
+                remotedir = os.path.dirname(remotefile)
                 rc = self.rsh(node, "mkdir -p %s" % remotedir)
                 assert rc == 0, "create dir \"%s\" on remote node \"%s\"" % (remotedir, node)
             src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
             with tempfile.NamedTemporaryFile(mode='w') as tmp:
                 if template:
-                    with open(src, "r") as f: lines=f.readlines()
+                    with open(src, "r") as f: lines = f.readlines()
                     for line in lines:
                         tmpstr = line
                         for k, v in template.items():
@@ -121,9 +121,9 @@ class RATesterScenarioComponent(ScenarioComponent):
                                 tmpstr = tmpstr.replace(k, v)
                         tmp.write(tmpstr)
                     tmp.flush()
-                    cpsrc=tmp.name
+                    cpsrc = tmp.name
                 else:
-                    cpsrc=src
+                    cpsrc = src
                 rc = self.rsh.cp(cpsrc, "root@%s:%s" % (node, remotefile))
                 assert rc == 0, "copy test data \"%s\" on remote node \"%s\"" % (src, node)
                 if owner:
@@ -137,7 +137,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         testopt = "-f" if is_dir is False else "-d"
         target = False
         for candidate in candidates:
-            if self.rsh(self.Env["nodes"][0], "test %s %s"%(testopt, candidate)) == 0:
+            if self.rsh(self.Env["nodes"][0], "test %s %s" % (testopt, candidate)) == 0:
                 return candidate
         assert target
 
@@ -149,7 +149,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             self.setup_scenario(cluster_manager)
             return 1
         except AssertionError as e:
-            print("Setup of scenario %s failed: %s"%\
+            print("Setup of scenario %s failed: %s" % \
                   (self.__class__.__name__, str(e)))
         return 0
 
@@ -158,7 +158,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             self.teardown_scenario(cluster_manager)
             return 1
         except AssertionError as e:
-            print("Teardown of scenario %s failed: %s"%\
+            print("Teardown of scenario %s failed: %s" % \
                   (self.__class__.__name__, str(e)))
         return 0
 
@@ -169,20 +169,20 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger.debug(args)
 
     def rsh_check(self, target, command, expected = 0):
-        if self.verbose: self.logger.log("> [%s] %s"%(target, command))
-        temp="ratester-tmp%f"%time.time()
-        res=self.rsh(target, command+" &>"+temp)
+        if self.verbose: self.logger.log("> [%s] %s" % (target, command))
+        temp = "ratester-tmp%f" % time.time()
+        res = self.rsh(target, command + " &>" + temp)
         if res != expected:
             if type(res) is list: res = res[0]
-            self.rsh(target, "mv %s '%s-%s-%d'"%(temp, temp, command, res))
+            self.rsh(target, "mv %s '%s-%s-%d'" % (temp, temp, command, res))
         else:
-            self.rsh(target, "rm -f %s"%temp)
-        assert res == expected, "%s: \"%s\" returned %d"%(self, command, res)
+            self.rsh(target, "rm -f %s" % temp)
+        assert res == expected, "%s: \"%s\" returned %d" % (self, command, res)
 
     def check_package_dependencies(self, target, pkgs):
         # make sure a container runtime is available
         if bool(self.Env["config"]["bundle"]):
-            pkgs = pkgs+[self.container_engine.package_name()]
+            pkgs = pkgs + [self.container_engine.package_name()]
 
         for p in pkgs:
             if not self.package_manager.is_installed(target, p):
@@ -210,7 +210,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             registry = self.Env["container_insecure_registry"]
             if registry:
                 for node in self.Env["nodes"]:
-                    if self.verbose: self.log("[Configuring insecure registry %s on %s]"%\
+                    if self.verbose: self.log("[Configuring insecure registry %s on %s]" % \
                                               (registry, node))
                     self.distribution.add_insecure_container_registry(node, registry)
             self.container_engine.enable_engine(self.Env["nodes"])
@@ -240,8 +240,8 @@ class RATesterScenarioComponent(ScenarioComponent):
         # create a new cluster
         # note: setting up cluster disable pacemaker service. re-enable it
         for cluster in self.Env["clusters"]:
-            self.log("Creating cluster for nodes %s"%cluster)
-            node=cluster[0]
+            self.log("Creating cluster for nodes %s" % cluster)
+            node = cluster[0]
             patterns = [r"(crmd|pacemaker-controld).*:\s*notice:\sState\stransition\sS_STARTING(\s->.*origin=do_started)?",
                         r"(crmd|pacemaker-controld).*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
             watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
@@ -259,7 +259,7 @@ class RATesterScenarioComponent(ScenarioComponent):
 
     def setup_keep_cluster(self, cluster_manager):
         for cluster in self.Env["clusters"]:
-            cluster_manager.log("Reusing cluster %s"%cluster)
+            cluster_manager.log("Reusing cluster %s" % cluster)
             # Disable STONITH by default. A dedicated ScenarioComponent
             # is in charge of enabling it if requested
             self.rsh_check(cluster[0], "pcs property set stonith-enabled=false")
@@ -274,9 +274,9 @@ class RATesterScenarioComponent(ScenarioComponent):
             # Note3: after a cleanup, pacemaker may log a warning log
             # if it finds the resource is still running. This does not
             # count as an error for the CTS test
-            target=cluster[0]
-            res_name=self.Env["config"]["name"]
-            rc = self.rsh(target, "pcs resource unmanage %s"%res_name)
+            target = cluster[0]
+            res_name = self.Env["config"]["name"]
+            rc = self.rsh(target, "pcs resource unmanage %s" % res_name)
             if rc == 0:
                 cluster_manager.log("Previous resource exists, delete it")
                 # no longer true with pacemaker 1.1.18 and resource refresh
@@ -284,18 +284,18 @@ class RATesterScenarioComponent(ScenarioComponent):
                 #         for n in self.Env["nodes"]]
                 resource_pattern = re.sub(r'-(master|clone|bundle)', '', res_name)
                 if self.Env["bundle"]:
-                    resource_pattern+='-bundle-%s-[0-9]'%self.Env["container_engine"]
+                    resource_pattern += '-bundle-%s-[0-9]' % self.Env["container_engine"]
 
                 patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", resource_pattern, n, '.*') \
                             for n in cluster]
-                watch=LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
+                watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
                 watch.setwatch()
-                self.rsh(target, "pcs resource refresh %s"%res_name)
+                self.rsh(target, "pcs resource refresh %s" % res_name)
                 watch.lookforall()
                 assert not watch.unmatched, watch.unmatched
-                self.rsh(target, "pcs resource disable %s"%res_name)
-                self.rsh(target, "pcs resource manage %s"%res_name)
-                self.rsh(target, "pcs resource delete %s --wait"%res_name)
+                self.rsh(target, "pcs resource disable %s" % res_name)
+                self.rsh(target, "pcs resource manage %s" % res_name)
+                self.rsh(target, "pcs resource delete %s --wait" % res_name)
 
     def teardown_scenario(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")

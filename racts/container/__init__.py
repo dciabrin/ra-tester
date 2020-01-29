@@ -30,7 +30,7 @@ def autodetect_container_engine(env):
         node = env["nodes"][0]
         inspect = rsh(node, "/usr/bin/hostnamectl | grep CPE", stdout=True).rstrip()
         if inspect:
-            items=inspect.split(":")
+            items = inspect.split(":")
             # ['       CPE OS Name', ' cpe', '/o', 'redhat', 'enterprise_linux', '8.0', 'GA']
             if items[5].startswith('8.'):
                 return "podman"
