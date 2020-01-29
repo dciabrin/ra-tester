@@ -5,8 +5,10 @@ from cts.remote import RemoteFactory
 from .rpm_rhel_7 import RpmRHEL7
 from .rpm_rhel_8 import RpmRHEL8
 
+
 def get_distribution(env):
     return env["package_manager"]
+
 
 def autodetect_distribution(env):
     rsh = RemoteFactory().getInstance()

@@ -3,6 +3,7 @@ from cts.remote import RemoteFactory
 from racts.raaction import ActionMixin
 from .manager import ClusterManager
 
+
 class Pacemaker2(ClusterManager, ActionMixin):
     def __init__(self, env):
         self.Env = env

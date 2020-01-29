@@ -29,6 +29,7 @@ from cts.logging      import LogFactory
 from cts.remote       import RemoteFactory
 from cts.CTSscenarios import Sequence
 
+
 class RARunner(Sequence):
     def __init__(self, ClusterManager, Components, Audits, Tests):
         Sequence.__init__(self, ClusterManager, Components, Audits, Tests)

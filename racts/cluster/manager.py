@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class ClusterManager(ABC):
     def __init__(self, env):
         self.Env = env
