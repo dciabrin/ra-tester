@@ -41,13 +41,14 @@ from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
+from racts.raconfig import RAConfig
 
 
 scenarios = {}
 
 class PrepareCluster(RATesterScenarioComponent):
     def __init__(self, environment):
-        RATesterScenarioComponent.__init__(self, environment)
+        RATesterScenarioComponent.__init__(self, environment, scenario_module_name="dummy")
 
 
 # The scenario below set up two basic configuration for the RA tests
@@ -57,11 +58,13 @@ class PrepareCluster(RATesterScenarioComponent):
 class SimpleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        self.Env["resource"] = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": "dummy",
             "ocf_name": "dummy",
+            "meta": None,
             "bundle": None
-        }
+        })
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]
@@ -70,13 +73,14 @@ scenarios["SimpleSetup"]=[SimpleSetup]
 class BundleSetup(PrepareCluster):
 
     def setup_scenario(self, cm):
-        self.Env["resource"] = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": "dummy-bundle",
             "ocf_name": "dummy",
             "meta": None,
             "bundle": True,
             "container_image": "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
-        }
+        })
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["BundleSetup"]=[BundleSetup]

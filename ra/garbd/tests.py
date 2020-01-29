@@ -49,10 +49,10 @@ class GarbdCommonTest(GaleraCommonTest):
     both unstarted (target-state:disabled)
     Teardown deletes the resource'''
     # TODO fix the bundle use case
-    def bundle_command(self, cluster_nodes, resource):
+    def bundle_command(self, cluster_nodes, config):
         engine = self.Env["container_engine"]
-        name = resource["name"]
-        image = resource["container_image"]
+        name = config["name"]
+        image = config["container_image"]
         return "pcs resource bundle create %s"\
             " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " replicas=2 masters=2 run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
@@ -65,8 +65,8 @@ class GarbdCommonTest(GaleraCommonTest):
             " storage-map id=map6 source-dir=/var/log/mysql target-dir=/var/log/mysql options=rw"%\
             (name, engine, image)
 
-    def resource_command(self, cluster_nodes, resource):
-        name = resource["ocf_name"]
+    def resource_command(self, cluster_nodes, config):
+        name = config["ocf_name"]
         if name == "garbd":
             nodes = ",".join([n+":4567" for n in cluster_nodes])
             return "pcs resource create %s ocf:heartbeat:garbd"\
@@ -85,16 +85,16 @@ class GarbdCommonTest(GaleraCommonTest):
 
     def setup_test(self, node):
         cluster_nodes = self.Env["clusters"][0]
-        self.setup_inactive_resource(cluster_nodes, self.Env["resource"])
-        self.setup_inactive_resource(cluster_nodes, self.Env["resource-garbd"])
+        self.setup_inactive_resource(cluster_nodes, self.Env["config"])
+        self.setup_inactive_resource(cluster_nodes, self.Env["config-garbd"])
         self.rsh_check(cluster_nodes[0], "pcs constraint location %s rule"\
                        " resource-discovery=exclusive score=0 osprole eq galera"%\
-                       self.Env["resource"]["name"])
+                       self.Env["config"]["name"])
         self.rsh_check(cluster_nodes[0], "pcs constraint location %s rule"\
                        " resource-discovery=exclusive score=0 osprole eq garbd"%\
-                       self.Env["resource-garbd"]["name"])
+                       self.Env["config-garbd"]["name"])
         self.rsh_check(cluster_nodes[0], "pcs constraint order start %s then start %s"%\
-                       (self.Env["resource"]["name"],self.Env["resource-garbd"]["name"]))
+                       (self.Env["config"]["name"],self.Env["config-garbd"]["name"]))
             
     def teardown_test(self, node):
         cluster_nodes = self.Env["clusters"][0]
@@ -112,10 +112,10 @@ class ClusterStart(GarbdCommonTest):
         # setup_test has created the inactive resource
         # force a probe to ensure pacemaker knows that the resource
         # is in disabled state
-        galera_rsc = self.Env["resource"]
-        garbd_rsc = self.Env["resource-garbd"]
-        galera_name = self.Env["resource"]["name"]
-        garbd_name = self.Env["resource-garbd"]["name"]
+        galera_rsc = self.Env["config"]
+        garbd_rsc = self.Env["config-garbd"]
+        galera_name = galera_rsc["name"]
+        garbd_name = garbd_rsc["name"]
         cluster_nodes = self.Env["clusters"][0]
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
                                            self.resource_probe_pattern(galera_rsc,n),
@@ -138,7 +138,7 @@ class ClusterStart(GarbdCommonTest):
         watch.lookforall()
 
         # bundles run OCF resources on bundle nodes, not host nodes
-        galera_ocf_name = self.Env["resource"]["ocf_name"]
+        galera_ocf_name = self.Env["config"]["ocf_name"]
         galera_target_nodes = self.resource_target_nodes(galera_rsc, cluster_nodes)
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "promote", galera_ocf_name, n, 'ok') \
                     for n in galera_target_nodes]

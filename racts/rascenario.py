@@ -48,8 +48,9 @@ from racts.rapatterns import RATemplates
 class RATesterScenarioComponent(ScenarioComponent):
     '''Assertion-friendly base class for scenario setup/teardown.
     '''
-    def __init__(self, environment):
+    def __init__(self, environment, scenario_module_name=""):
         self.rsh = RemoteFactory().getInstance()
+        self.module_name = scenario_module_name
         self.logger = LogFactory()
         self.Env = environment
         self.verbose = bool(self.Env["verbose"])
@@ -179,7 +180,7 @@ class RATesterScenarioComponent(ScenarioComponent):
 
     def check_package_dependencies(self, target, pkgs):
         # make sure a container runtime is available
-        if self.Env["resource"].get("bundle", False):
+        if bool(self.Env["config"]["bundle"]):
             pkgs = pkgs+[self.container_engine.package_name()]
 
         for p in pkgs:
@@ -204,9 +205,9 @@ class RATesterScenarioComponent(ScenarioComponent):
                 self.check_package_dependencies(node, self.dependencies)
 
         # container setup
-        if self.Env["resource"].get("bundle", False):
+        if bool(self.Env["config"]["bundle"]):
             registry = self.Env["container_insecure_registry"]
-            if self.Env["resource"].get("bundle", False) and registry:
+            if registry:
                 for node in self.Env["nodes"]:
                     if self.verbose: self.log("[Configuring insecure registry %s on %s]"%\
                                               (registry, node))
@@ -273,13 +274,14 @@ class RATesterScenarioComponent(ScenarioComponent):
             # if it finds the resource is still running. This does not
             # count as an error for the CTS test
             target=cluster[0]
-            rc = self.rsh(target, "pcs resource unmanage %s"%self.Env["rsc_name"])
+            res_name=self.Env["config"]["name"]
+            rc = self.rsh(target, "pcs resource unmanage %s"%res_name)
             if rc == 0:
                 cluster_manager.log("Previous resource exists, delete it")
                 # no longer true with pacemaker 1.1.18 and resource refresh
                 # patterns = [r"(crmd|pacemaker-controld).*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
                 #         for n in self.Env["nodes"]]
-                resource_pattern = re.sub(r'-(master|clone|bundle)','',self.Env["rsc_name"])
+                resource_pattern = re.sub(r'-(master|clone|bundle)','',res_name)
                 if self.Env["bundle"]:
                     resource_pattern+='-bundle-%s-[0-9]'%self.Env["container_engine"]
 
@@ -287,12 +289,12 @@ class RATesterScenarioComponent(ScenarioComponent):
                             for n in cluster]
                 watch=LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
                 watch.setwatch()
-                self.rsh(target, "pcs resource refresh %s"%self.Env["rsc_name"])
+                self.rsh(target, "pcs resource refresh %s"%res_name)
                 watch.lookforall()
                 assert not watch.unmatched, watch.unmatched
-                self.rsh(target, "pcs resource disable %s"%self.Env["rsc_name"])
-                self.rsh(target, "pcs resource manage %s"%self.Env["rsc_name"])
-                self.rsh(target, "pcs resource delete %s --wait"%self.Env["rsc_name"])
+                self.rsh(target, "pcs resource disable %s"%res_name)
+                self.rsh(target, "pcs resource manage %s"%res_name)
+                self.rsh(target, "pcs resource delete %s --wait"%res_name)
 
     def teardown_scenario(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")

@@ -41,14 +41,14 @@ from cts.watcher   import LogWatcher
 from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
-
+from racts.raconfig import RAConfig
 
 
 scenarios = {}
 
 class PrepareCluster(RATesterScenarioComponent):
     def __init__(self, environment):
-        RATesterScenarioComponent.__init__(self, environment)
+        RATesterScenarioComponent.__init__(self, environment, scenario_module_name="rabbitmq")
         self.dependencies = ["rabbitmq-server"]
 
     def setup_configs(self, cluster_nodes):
@@ -64,7 +64,7 @@ class PrepareCluster(RATesterScenarioComponent):
             ip=self.node_ip(node)
             ipcomma=ip.replace(".",",")
             shortname=self.node_shortname(node)
-            if self.Env.has_key("use_ipv6"):
+            if self.Env.has_key("ipv6"):
                 ipv6inetrc = "{inet6, true}."
                 ipv6rabbitmqserver = " -proto_dist inet6_tcp"
                 ipv6rabbitmqctl = "RABBITMQ_CTL_ERL_ARGS=\"-proto_dist inet6_tcp\""
@@ -87,7 +87,7 @@ class PrepareCluster(RATesterScenarioComponent):
                               })
 
     def setup_state(self, cluster_nodes):
-        resource=self.Env["resource"]
+        config=self.Env["config"]
         for node in cluster_nodes:
             # blank rabbitmq state on disk
             self.log("recreating rabbitmq mnesia on node %s"%node)
@@ -98,10 +98,10 @@ class PrepareCluster(RATesterScenarioComponent):
             erlcookie=os.path.join(configdir, "cookie")
             self.copy_to_node(node,
                               [(erlcookie,   "/var/lib/rabbitmq/.erlang.cookie")],
-                              True, resource["user"], "0600")
+                              True, config["user"], "0600")
             # chown log file
             self.rsh(node, "chown -R %s:%s /var/log/rabbitmq /var/lib/rabbitmq"%\
-                     (resource["user"], resource["user"]))
+                     (config["user"], config["user"]))
 
 
 
@@ -117,13 +117,14 @@ class SimpleSetup(PrepareCluster):
         # self.Env["rsc_ocf_name"] = "rabbitmq"
         # self.Env["rsc_meta"] = "notify=true clone interleave=true ordered=true"
         # self.Env["rabbitmq_user"] = "rabbitmq"
-        self.Env["resource"] = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": "rabbitmq-clone",
             "ocf_name": "rabbitmq",
             "meta": "notify=true clone interleave=true ordered=true",
             "user": "rabbitmq",
             "bundle": None
-        }
+        })
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["SimpleSetup"]=[SimpleSetup]
@@ -138,14 +139,15 @@ class BundleSetup(PrepareCluster):
         # self.Env["rsc_meta"] = "container-attribute-target=host notify=true"
         # self.Env["rabbitmq_user"] = "42439" # rabbitmq user uid in kolla image
         # self.Env["container_image"] = "docker.io/tripleoqueens/centos-binary-rabbitmq:current-tripleo-rdo"
-        self.Env["resource"] = {
+        config = RAConfig(self.Env, self.module_name, {
             "name": "rabbitmq-bundle",
             "ocf_name": "rabbitmq",
             "meta": "container-attribute-target=host notify=true",
             "user": "42439",
             "bundle": True,
             "container_image": "docker.io/tripleoqueens/centos-binary-rabbitmq:current-tripleo-rdo"
-        }
+        })
+        self.Env["config"] = config
         PrepareCluster.setup_scenario(self,cm)
 
 scenarios["BundleSetup"]=[BundleSetup]
