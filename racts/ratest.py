@@ -154,13 +154,8 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         self.rsh_check(node, "pcs resource delete %s"%resource["name"])
 
     def errorstoignore(self):
-        return [
-            # docker daemon is quite verbose, but all real errors are reported by pacemaker
-            r"dockerd-current.*:\s*This node is not a swarm manager",
-            r"dockerd-current.*:\s*No such container",
-            r"dockerd-current.*:\s*No such image",
-            r"dockerd-current.*Handler for GET.*/.*returned error: (network|plugin).*not found",
-            r"dockerd-current.*Handler for GET.*/.*returned error: get.*no such volume",
+        container_logs = self.Env["distribution"].container_engine().errorstoignore()
+        return container_logs + [
             # pengine logs spurious error on regular operations
             r"pengine.*error: Could not fix addr for ",
             # bundle: when associating an ocf resource to a bundle, pengine

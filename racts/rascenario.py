@@ -190,6 +190,13 @@ class RATesterScenarioComponent(ScenarioComponent):
                     self.package_manager.update(target, p)
 
     def setup_scenario(self, cluster_manager):
+        # In CTS, only tests classes come with a list of logs to be ignored
+        # by audit. But in ratester, our "scenario" setup runs various
+        # operations that could trigger bad logs in audit.
+        # So tell CTS to ignore logs before tests as well.
+        ignored_logs = self.Env["distribution"].container_engine().errorstoignore()
+        cluster_manager._ClusterManager__instance_errorstoignore.extend(ignored_logs)
+
         # install package pre-requisites
         if not self.Env.has_key("skip_install_dependencies"):
             if self.verbose: self.log("[Installing/Updating dependencies]")
@@ -197,7 +204,13 @@ class RATesterScenarioComponent(ScenarioComponent):
                 self.check_package_dependencies(node, self.dependencies)
 
         # container setup
-        if self.Env.has_key("bundle"):
+        if self.Env["resource"].get("bundle", False):
+            registry = self.Env["container_insecure_registry"]
+            if self.Env["resource"].get("bundle", False) and registry:
+                for node in self.Env["nodes"]:
+                    if self.verbose: self.log("[Configuring insecure registry %s on %s]"%\
+                                              (registry, node))
+                    self.distribution.add_insecure_container_registry(node, registry)
             self.container_engine.enable_engine(self.Env["nodes"])
             if not self.Env.has_key("skip_container_image_pull"):
                 self.container_engine.pull_image(self.Env["nodes"],
