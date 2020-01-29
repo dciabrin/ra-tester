@@ -180,7 +180,7 @@ class RATesterScenarioComponent(ScenarioComponent):
     def check_package_dependencies(self, target, pkgs):
         if self.Env.has_key("skip_install_dependencies"): return
         # make sure a container runtime is available
-        if self.Env.has_key("bundle"):
+        if self.Env["resource"].get("bundle", False):
             pkgs = pkgs+[self.container_engine.package_name()]
 
         for p in pkgs:
