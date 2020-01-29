@@ -221,8 +221,6 @@ if __name__ == '__main__':
     tracemalloc.start()
     prepare_cts()
     ratester_env, cts_args = parse_ratester_args(sys.argv[1:])
-    print(ratester_env)
-    print(cts_args)
     env = CtsLab(["--stonith","no"]+cts_args)
     inject_ratester_env(ratester_env, env)
     cluster_manager = crm_common(env)
