@@ -43,9 +43,10 @@ from cts.CTSaudits import AuditList, LogAudit
 from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
 
-from racts.cluster import autodetect_cluster_manager
-from racts.package import autodetect_package_manager
-from racts.container import autodetect_container_engine
+# from racts.cluster import autodetect_cluster_manager
+# from racts.package import autodetect_package_manager
+# from racts.container import autodetect_container_engine
+from racts.distrib import autodetect_distribution
 from racts.rafencing import RATesterDefaultFencing
 from racts.rarunner import RARunner
 from racts.raaudit import RATesterAuditList
@@ -233,21 +234,26 @@ if __name__ == '__main__':
 
     # if not env.has_key("cluster_manager"):
     #      env["cluster_manager"] = "pcmk1"
-    if not env.has_key("cluster_manager"):
-        print("Detecting pacemaker version on the target cluster nodes")
-        name = autodetect_cluster_manager(env)
-        env["cluster_manager"] = name
-        print("Using cluster manager module \"%s\""%name)
-    if not env.has_key("container_engine"):
-        print("Detecting container engine on the target cluster nodes")
-        name = autodetect_container_engine(env)
-        env["container_engine"] = name
-        print("Using container engine module \"%s\""%name)
-    if not env.has_key("package_manager"):
-        print("Detecting package type and distribution flavor")
-        name = autodetect_package_manager(env)
-        env["package_manager"] = name
-        print("Package manager \"%s\" configured"%type(name).__name__)
+    # if not env.has_key("cluster_manager"):
+    #     print("Detecting pacemaker version on the target cluster nodes")
+    #     name = autodetect_cluster_manager(env)
+    #     env["cluster_manager"] = name
+    #     print("Using cluster manager module \"%s\""%name)
+    # if not env.has_key("container_engine"):
+    #     print("Detecting container engine on the target cluster nodes")
+    #     name = autodetect_container_engine(env)
+    #     env["container_engine"] = name
+    #     print("Using container engine module \"%s\""%name)
+    # if not env.has_key("package_manager"):
+    #     print("Detecting package type and distribution flavor")
+    #     name = autodetect_package_manager(env)
+    #     env["package_manager"] = name
+    #     print("Package manager \"%s\" configured"%type(name).__name__)
+    distrib = autodetect_distribution(env)
+    env["distribution"] = distrib
+    # env["package_manager"] = distrib.package_manager()
+    # env["container_engine"] = distrib.container_engine()
+    # env["cluster_manager"] = distrib.cluster_manager()
 
     env["stonith"]=False
     if env["DoFencing"]==1 or (env.has_key("DoStonith") and env["DoStonith"]==1):
