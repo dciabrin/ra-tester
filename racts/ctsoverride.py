@@ -46,7 +46,7 @@ def ratester___get_lines(self, timeout):
 
     for t in pending:
         t.join(8.0)
-        if t.isAlive():
+        if t.is_alive():
             self.debug("%s: %s did not returned after 8s." % (self.name, repr(t)))
             self.debug("%s: forgetting node %s." % (self.name, t.node))
             self.hosts=[x for x in self.hosts if x != t.node]
