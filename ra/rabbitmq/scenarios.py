@@ -92,6 +92,7 @@ class PrepareCluster(RATesterScenarioComponent):
             # blank rabbitmq state on disk
             self.log("recreating rabbitmq mnesia on node %s"%node)
             self.rsh(node, "rm -rf /var/lib/rabbitmq /var/log/rabbitmq")
+            self.rsh(node, "mkdir /var/log/rabbitmq")
             basedir=os.path.dirname(os.path.abspath(__file__))
             configdir=os.path.join(basedir, "config")
             erlcookie=os.path.join(configdir, "cookie")
