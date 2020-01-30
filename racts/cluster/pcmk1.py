@@ -15,12 +15,12 @@ class Pacemaker1(ClusterManager, ActionMixin):
         return self.rsh(self.Env["nodes"][0], "pacemakerd --version | grep -q 'Pacemaker 1.'") == 0
 
     def authenticate_nodes(self, nodes):
-        self.rsh_check(nodes[0], "pcs cluster auth -u hacluster -p ratester %s" % \
+        self.rsh_check(nodes[0], "pcs cluster auth -u hacluster -p ratester %s" %
                        " ".join(nodes))
 
     def create_cluster(self, nodes):
         self.rsh_check(nodes[0],
-                       "pcs cluster setup --force --name ratester %s" % \
+                       "pcs cluster setup --force --name ratester %s" %
                        " ".join(nodes))
 
     def set_node_property(self, nodes, node, name, value):
@@ -29,7 +29,7 @@ class Pacemaker1(ClusterManager, ActionMixin):
 
     def add_remote_node(self, cluster_nodes, node):
         self.rsh_check(cluster_nodes[0],
-                       "pcs cluster node add-remote %s %s reconnect_interval=60 op monitor interval=20" % \
+                       "pcs cluster node add-remote %s %s reconnect_interval=60 op monitor interval=20" %
                        (node, node))
 
     def meta_promotable_resource_name(self, ocf_name):
