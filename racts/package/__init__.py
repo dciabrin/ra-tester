@@ -2,7 +2,6 @@ import re
 
 from cts.remote import RemoteFactory
 
-from . import manager
 from .rpm import Rpm
 
 managers = {
