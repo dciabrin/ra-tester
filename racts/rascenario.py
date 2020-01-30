@@ -26,19 +26,14 @@ Licensed under the GNU GPL.
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 
 
-import sys, signal, time, os, re, string, subprocess, tempfile
-from stat import *
-from cts import CTS
-from cts.CTStests import CTSTest
-# from cts.CM_ais import crm_mcp
-from cts.CTSscenarios import *
-from cts.CTSaudits    import *
-from cts.CTSvars      import *
-from cts.patterns     import PatternSelector
+import time
+import os
+import re
+import tempfile
+from cts.CTSscenarios import ScenarioComponent
 from cts.logging      import LogFactory
 from cts.remote       import RemoteFactory
 from cts.watcher      import LogWatcher
-from cts.environment  import EnvFactory
 # from racts.cluster    import get_cluster_manager
 # from racts.package    import get_package_manager
 # from racts.container  import get_container_engine

@@ -1,6 +1,5 @@
 from cts.remote import RemoteFactory
 
-from . import engine
 from .docker import Docker
 from .podman import Podman
 

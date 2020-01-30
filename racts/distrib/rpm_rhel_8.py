@@ -1,6 +1,5 @@
 from cts.logging import LogFactory
 from cts.remote import RemoteFactory
-from racts.raaction import ActionMixin
 from racts.distrib.rpm_rhel_7 import RpmRHEL7
 from racts.cluster.pcmk2 import Pacemaker2
 from racts.package.dnf import Dnf

@@ -26,8 +26,7 @@ Licensed under the GNU GPL.
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 
 
-import sys, signal, time, os, re, string, subprocess, tempfile
-from cts.CTSaudits import ClusterAudit, AuditList, LogAudit, FileAudit
+from cts.CTSaudits import ClusterAudit, AuditList, FileAudit
 
 AllRAAuditClasses = []
 
