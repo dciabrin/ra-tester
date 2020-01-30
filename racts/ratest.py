@@ -97,7 +97,7 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         patterns = [r"(crmd|pacemaker-controld).*:\s*notice:\sState\stransition\s.*->\sS_IDLE(\s.*origin=notify_crmd)?"]
         patterns += [self.ratemplates.build("Pat:RscRemoteOp", "probe",
                                             self.resource_probe_pattern(config, n),
-                                            n, 'not running') \
+                                            n, 'not running')
                      for n in cluster_nodes]
 
         watch = self.create_watch(patterns, self.Env["DeadTime"])
@@ -116,8 +116,10 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         # create the resource, set it disabled if it is not
         # running in a bundle
         resource_cmd = self.resource_command(cluster_nodes, config)
-        if meta != "": resource_cmd += " meta %s" % meta
-        if not config["bundle"]: resource_cmd += " --disabled"
+        if meta != "":
+            resource_cmd += " meta %s" % meta
+        if not config["bundle"]:
+            resource_cmd += " --disabled"
         self.rsh_check(node, resource_cmd)
 
         watch.lookforall()
