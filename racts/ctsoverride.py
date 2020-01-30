@@ -27,8 +27,8 @@ Licensed under the GNU GPL.
 
 
 from subprocess import Popen, PIPE
-from cts.remote    import RemoteExec, RemoteFactory
-from cts.watcher   import LogWatcher
+from cts.remote import RemoteExec, RemoteFactory
+from cts.watcher import LogWatcher
 from cts.environment import Environment
 from cts.CTS import NodeStatus
 
@@ -60,8 +60,8 @@ def ratester_ensure_control_master(self, node):
     # pid leaking a dup'd fd.
     # Force the creation of the master socket here, without reading
     # output to avoid dead locking on the next remote call
-    proc =  Popen(self._cmd([node, "true"]),
-                 stdout = PIPE, stderr = PIPE, close_fds = True, shell = True)
+    proc = Popen(self._cmd([node, "true"]),
+                 stdout=PIPE, stderr=PIPE, close_fds=True, shell=True)
     rc = proc.wait()
     proc.stdout.close()
     proc.stderr.close()
