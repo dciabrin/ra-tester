@@ -1,5 +1,3 @@
-import re
-
 from cts.remote import RemoteFactory
 
 from .rpm_rhel_7 import RpmRHEL7

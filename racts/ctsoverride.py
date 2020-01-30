@@ -26,9 +26,8 @@ Licensed under the GNU GPL.
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 
 
-import sys, signal, time, os, re, string, subprocess, tempfile
 from subprocess import Popen, PIPE
-from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
+from cts.remote    import RemoteExec, RemoteFactory
 from cts.watcher   import LogWatcher
 from cts.environment import Environment
 from cts.CTS import NodeStatus

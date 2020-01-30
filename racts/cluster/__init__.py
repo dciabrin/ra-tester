@@ -1,5 +1,3 @@
-from . import manager
-
 from .pcmk1 import Pacemaker1
 from .pcmk2 import Pacemaker2
 
