@@ -31,9 +31,9 @@ import os
 import re
 import tempfile
 from cts.CTSscenarios import ScenarioComponent
-from cts.logging      import LogFactory
-from cts.remote       import RemoteFactory
-from cts.watcher      import LogWatcher
+from cts.logging import LogFactory
+from cts.remote import RemoteFactory
+from cts.watcher import LogWatcher
 # from racts.cluster    import get_cluster_manager
 # from racts.package    import get_package_manager
 # from racts.container  import get_container_engine
@@ -163,7 +163,7 @@ class RATesterScenarioComponent(ScenarioComponent):
     def debug(self, args):
         self.logger.debug(args)
 
-    def rsh_check(self, target, command, expected = 0):
+    def rsh_check(self, target, command, expected=0):
         if self.verbose: self.logger.log("> [%s] %s" % (target, command))
         temp = "ratester-tmp%f" % time.time()
         res = self.rsh(target, command + " &>" + temp)
