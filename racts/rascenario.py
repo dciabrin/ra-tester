@@ -84,7 +84,8 @@ class RATesterScenarioComponent(ScenarioComponent):
                 src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
                 with tempfile.NamedTemporaryFile() as tmp:
                     if template:
-                        with open(src, "r") as f: template = f.read()
+                        with open(src, "r") as f:
+                            template = f.read()
                         tmp.write(template.replace("{{node}}", self.node_fqdn(node)))
                         tmp.flush()
                         cpsrc = tmp.name
@@ -108,7 +109,8 @@ class RATesterScenarioComponent(ScenarioComponent):
             src = os.path.join(os.path.dirname(os.path.abspath(__file__)), localfile)
             with tempfile.NamedTemporaryFile(mode='w') as tmp:
                 if template:
-                    with open(src, "r") as f: lines = f.readlines()
+                    with open(src, "r") as f:
+                        lines = f.readlines()
                     for line in lines:
                         tmpstr = line
                         for k, v in template.items():
@@ -144,7 +146,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             self.setup_scenario(cluster_manager)
             return 1
         except AssertionError as e:
-            print("Setup of scenario %s failed: %s" % \
+            print("Setup of scenario %s failed: %s" %
                   (self.__class__.__name__, str(e)))
         return 0
 
@@ -153,7 +155,7 @@ class RATesterScenarioComponent(ScenarioComponent):
             self.teardown_scenario(cluster_manager)
             return 1
         except AssertionError as e:
-            print("Teardown of scenario %s failed: %s" % \
+            print("Teardown of scenario %s failed: %s" %
                   (self.__class__.__name__, str(e)))
         return 0
 
@@ -164,11 +166,13 @@ class RATesterScenarioComponent(ScenarioComponent):
         self.logger.debug(args)
 
     def rsh_check(self, target, command, expected=0):
-        if self.verbose: self.logger.log("> [%s] %s" % (target, command))
+        if self.verbose:
+            self.logger.log("> [%s] %s" % (target, command))
         temp = "ratester-tmp%f" % time.time()
         res = self.rsh(target, command + " &>" + temp)
         if res != expected:
-            if type(res) is list: res = res[0]
+            if type(res) is list:
+                res = res[0]
             self.rsh(target, "mv %s '%s-%s-%d'" % (temp, temp, command, res))
         else:
             self.rsh(target, "rm -f %s" % temp)
@@ -196,7 +200,8 @@ class RATesterScenarioComponent(ScenarioComponent):
 
         # install package pre-requisites
         if not self.Env.has_key("skip_install_dependencies"):
-            if self.verbose: self.log("[Installing/Updating dependencies]")
+            if self.verbose:
+                self.log("[Installing/Updating dependencies]")
             for node in self.Env["nodes"]:
                 self.check_package_dependencies(node, self.dependencies)
 
@@ -205,8 +210,9 @@ class RATesterScenarioComponent(ScenarioComponent):
             registry = self.Env["container_insecure_registry"]
             if registry:
                 for node in self.Env["nodes"]:
-                    if self.verbose: self.log("[Configuring insecure registry %s on %s]" % \
-                                              (registry, node))
+                    if self.verbose:
+                        self.log("[Configuring insecure registry %s on %s]" %
+                                 (registry, node))
                     self.distribution.add_insecure_container_registry(node, registry)
             self.container_engine.enable_engine(self.Env["nodes"])
             if not self.Env.has_key("skip_container_image_pull"):
@@ -281,7 +287,7 @@ class RATesterScenarioComponent(ScenarioComponent):
                 if self.Env["bundle"]:
                     resource_pattern += '-bundle-%s-[0-9]' % self.Env["container_engine"]
 
-                patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", resource_pattern, n, '.*') \
+                patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", resource_pattern, n, '.*')
                             for n in cluster]
                 watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
                 watch.setwatch()

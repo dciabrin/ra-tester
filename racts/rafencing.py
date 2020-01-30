@@ -52,14 +52,15 @@ class RATesterFencingComponent(RATesterScenarioComponent):
 class RATesterDefaultFencing(RATesterFencingComponent):
     def setup_scenario(self, cluster_manager):
         cluster_manager.log("Enabling fencing in cluster")
-        self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence %s %s action=reboot" % \
+        self.rsh_check(self.Env["nodes"][0], "pcs stonith create fence %s %s action=reboot" %
                        (self.Env["stonith-type"],
                         self.Env["stonith-params"]))
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=true")
 
     def teardown_scenario(self, cluster_manager):
         # handy debug hook
-        if self.Env.has_key("keep_resources"): return
+        if self.Env.has_key("keep_resources"):
+            return
         self.rsh_check(self.Env["nodes"][0], "pcs property set stonith-enabled=false")
         self.rsh_check(self.Env["nodes"][0], "pcs stonith delete fence")
 
