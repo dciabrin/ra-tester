@@ -20,6 +20,9 @@ def autodetect_distribution(env):
             manager = RpmRHEL7(env)
         elif info["Release"].startswith("8."):
             manager = RpmRHEL8(env)
+    elif info["Distributor ID"].startswith("CentOS"):
+        if info["Release"].startswith("7."):
+            manager = RpmRHEL7(env)
 
     assert manager is not False
     return manager
