@@ -392,14 +392,20 @@ prepare_base_image()
 	$VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} ${CMD}
     fi
 
+    if [ "$PKG_FORMAT" = "deb" ]; then
+	echo "Update packages on the temporary image"
+	$VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
+	    --run-command "apt-get update" --run-command "apt-get upgrade -y"
+    fi
+
     # ensure lp#1577982 is fixed otherwise cloud-init fail to assign ip properly
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
-        --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/site-packages/cloudinit/sources/DataSourceNoCloud.py" \
+        --run-command "sed -i \"s/'network-config': {}/'network-config': None/\" /usr/lib/python*/*-packages/cloudinit/sources/DataSourceNoCloud.py" \
 	--install $(distro_pkg lsb-core),crudini
 
     if [ $CLUSTERPKGS -eq 1 ]; then
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMBASEIMG} \
-	--install pacemaker,pacemaker-remote,$(distro_pkg pacemaker-cts) \
+	--install pacemaker,$(distro_pkg pacemaker-remote),$(distro_pkg pacemaker-cts) \
 	--install pcs,resource-agents \
         --install $(distro_pkg fence-virtd),$(distro_pkg fence-agents-virsh),$(distro_pkg fence-agents-xvm) \
         --run-command "systemctl enable pcsd" \

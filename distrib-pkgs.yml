@@ -25,6 +25,7 @@ rpm:
 deb:
   dig: dnsutils
   pacemaker-cts: pacemaker
+  pacemaker-remote: pacemaker
   fence-virtd: fence-agents
   fence-agents-virsh: fence-agents
   fence-agents-xvm: fence-agents
