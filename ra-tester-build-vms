@@ -424,11 +424,14 @@ setup_node()
     # we could let cloudinit set hostname, but doing it here
     # has the proper hostname propagated to dnsmasq's DHCP on the host
     # NOTE: do a special dance to prevent --hostname to update /etc/hosts
+    # NOTE2: remove the machine-id to force virt-customize to re-generate
+    # unique machine id for this VM
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMTMPPATH}/ratmp-base.qcow2 \
         --upload ${VMTMPPATH}/90-ratester-nic-order.rules:/etc/udev/rules.d \
         --move /etc/hosts:/etc/hosts.tmp \
         --hostname ${VMPREFIXNAME}${nodenum} \
-        --move /etc/hosts.tmp:/etc/hosts
+        --move /etc/hosts.tmp:/etc/hosts \
+        --run-command "rm -f /etc/machine-id && systemd-machine-id-setup"
     $VIRSH -c ${QEMUURI} vol-upload --pool ${VMPOOLNAME} ${IMGNAME} ${VMTMPPATH}/ratmp-base.qcow2
 
     echo "Creating cloud-init metadata for ${VMPREFIXNAME}${nodenum}"
