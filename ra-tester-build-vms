@@ -74,6 +74,7 @@ VFLAGS=
 
 VMRAM=${VMRAM:-2048}
 VMCPU=${VMCPU:-2}
+VMDISK=${VMDISK:-}
 QEMUURI=${QEMUURI:-qemu:///system}
 CMDTIMEOUT=${CMDTIMEOUT:-300}
 GUESTFS_OPTS=${GUESTFS_OPTS:-}
@@ -104,8 +105,37 @@ function ssh_virsh {
     $SSH_HYPERVISOR "virsh $*"
 }
 
+function ssh_virt_df {
+    $SSH_HYPERVISOR "env $GUESTFS_OPTS virt-df $*"
+}
+
+function ssh_virt_resize {
+    $SSH_HYPERVISOR "env $GUESTFS_OPTS virt-resize $*"
+}
+
+function ssh_virt_filesystems {
+    $SSH_HYPERVISOR "env $GUESTFS_OPTS virt-filesystems $*"
+}
+
+function ssh_virt_rescue_grub {
+    local device=$1
+    local image=$2
+    python <<EOF
+import pexpect
+import sys
+child = pexpect.spawn('${SSH_HYPERVISOR_TTY} "env ${GUESTFS_OPTS} virt-rescue -a ${image} -i"', encoding='utf-8')
+child.logfile_read = sys.stdout
+child.expect('<rescue>')
+child.sendline('chroot /sysroot grub-install ${device}')
+child.expect('<rescue>')
+child.sendline('exit')
+child.expect(pexpect.EOF)
+EOF
+}
+
 function configure_ssh_commands {
     SSH_HYPERVISOR="ssh $SSH_CONTROL_MASTER_OPTS $HYPERVISOR"
+    SSH_HYPERVISOR_TTY="ssh $SSH_CONTROL_MASTER_OPTS -t $HYPERVISOR"
     SSH_PROXY_CMD="ssh $SSH_CONTROL_MASTER_OPTS -W %h:%p $HYPERVISOR"
 }
 
@@ -115,6 +145,7 @@ VIRT_CUSTOMIZE=ssh_virt_customize
 
 # Generated based on user config
 SSH_HYPERVISOR=
+SSH_HYPERVISOR_TTY=
 SSH_PROXY_CMD=
 SSHMAC=
 CLUSTERMAC=
@@ -312,6 +343,18 @@ prepare_base_image()
 
     echo "Creating temporary base image based on ${IMG}"
     $SSH_HYPERVISOR cp ${IMG} ${VMBASEIMG}
+
+    if [ -n "${VMDISK}" ]; then
+	echo "Setting temporary base image's disk size to ${VMDISK}"
+	$SSH_HYPERVISOR qemu-img resize ${VMBASEIMG} ${VMDISK}
+	partition=$(ssh_virt_df ${IMG} --csv | sed '1d' | sort -r -t, -nk3,3 | awk -F, '{print $2;exit}')
+	echo "Expanding partition '${partition}' in temporary base image to match new disk image size"
+	ssh_virt_resize --output-format qcow2 --expand $partition ${IMG} ${VMBASEIMG}
+	# Some images (e.g. ubuntu focal) get their partition renamed
+	# by the resize, so re-run grub to fix any boot issue
+	device=$(ssh_virt_filesystems -a ${IMG} --blkdevs | head -1)
+	ssh_virt_rescue_grub $device $VMBASEIMG
+    fi
 
     echo "Determining package format in base image ${IMG}"
     local inspect=$($VIRT_INSPECTOR -a ${VMBASEIMG})

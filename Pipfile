@@ -8,5 +8,6 @@ verify_ssl = true
 [packages]
 netaddr = "*"
 pyyaml = "*"
+pexpect = "*"
 
 [requires]
