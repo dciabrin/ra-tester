@@ -420,6 +420,9 @@ setup_node()
     CLUSTERMAC=$(node_mac $CLUSTERMAC $nodenum) \
     envsubst <templates/udev-90-ratester-nic-order.rules.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/90-ratester-nic-order.rules >/dev/null
 
+    echo "Forcing DHCP to use MAC address as ClientId for ${VMPREFIXNAME}${nodenum}"
+    envsubst <templates/00-ratester.network.in | $SSH_HYPERVISOR tee ${VMTMPPATH}/00-ratester.network >/dev/null
+
     echo "Creating image for ${VMPREFIXNAME}${nodenum}"
     # we could let cloudinit set hostname, but doing it here
     # has the proper hostname propagated to dnsmasq's DHCP on the host
@@ -428,6 +431,7 @@ setup_node()
     # unique machine id for this VM
     $VIRT_CUSTOMIZE ${VFLAGS} -a ${VMTMPPATH}/ratmp-base.qcow2 \
         --upload ${VMTMPPATH}/90-ratester-nic-order.rules:/etc/udev/rules.d \
+        --upload ${VMTMPPATH}/00-ratester.network:/etc/systemd/network \
         --move /etc/hosts:/etc/hosts.tmp \
         --hostname ${VMPREFIXNAME}${nodenum} \
         --move /etc/hosts.tmp:/etc/hosts \
