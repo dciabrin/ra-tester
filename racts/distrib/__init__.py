@@ -2,6 +2,7 @@ from cts.remote import RemoteFactory
 
 from .rpm_rhel_7 import RpmRHEL7
 from .rpm_rhel_8 import RpmRHEL8
+from .deb_pcmk2 import DebPcmk2
 
 
 def get_distribution(env):
@@ -23,6 +24,8 @@ def autodetect_distribution(env):
     elif info["Distributor ID"].startswith("CentOS"):
         if info["Release"].startswith("7."):
             manager = RpmRHEL7(env)
+    elif info["Distributor ID"].startswith("Ubuntu"):
+        manager = DebPcmk2(env)
 
     assert manager is not False
     return manager
