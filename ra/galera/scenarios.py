@@ -44,48 +44,6 @@ from cts.environment import EnvFactory
 from racts.rascenario import RATesterScenarioComponent
 from racts.raconfig import RAConfig
 
-
-# class GaleraSetupMixin(object):
-#     def mysql_etc_dir(self):
-#         target_dir = self.get_candidate_path(["/etc/my.cnf.d", "/etc/mysql/conf.d"],
-#                                              is_dir=True)
-#         return target_dir
-
-#     def init_and_setup_mysql_defaults(self):
-#         self.log("Ensuring minimal mysql configuration")
-#         for node in self.Env["nodes"]:
-#             rc = self.rsh(node,
-#                           "if [ ! -d /var/lib/mysql ]; then "
-#                           "mkdir /var/lib/mysql; fi")
-#             assert rc == 0, "could not create dir on remote node %s" % node
-#             rc = self.rsh(node,
-#                           "chown -R %s:%s /var/lib/mysql"%\
-#                           (self.Env["galera_user"],self.Env["galera_user"]) )
-#             assert rc == 0, "could not set permission of galera directory remote node %s" % node
-#             etc_dir = self.mysql_etc_dir()
-#             rc = self.rsh(node,
-#                           "if ! `my_print_defaults --mysqld | grep -q socket`; then "
-#                           "echo -e '[mysqld]\nsocket=/var/lib/mysql/mysql.sock\n"
-#                           "[client]\nsocket=/var/lib/mysql/mysql.sock'"
-#                           ">%s/ratester.cnf; fi" %etc_dir)
-#             assert rc == 0, "could not override mysql settings on node %s" % node
-
-#     def setup_galera_config(self):
-#         self.log("Copying test-specific galera config")
-#         with tempfile.NamedTemporaryFile() as tmp:
-#             targetlib = self.get_candidate_path(["/usr/lib64/galera/libgalera_smm.so",
-#                                                  "/usr/lib/galera/libgalera_smm.so",
-#                                                  "/usr/lib64/galera-3/libgalera_smm.so"])
-#             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "galera.cnf.in"),"r") as f: template=f.read()
-#             nodes_fqdn=[self.node_fqdn(x) for x in self.Env["nodes"]]
-#             tmp.write(template.replace("{{nodes}}",",".join(nodes_fqdn))\
-#                               .replace("{{libpath}}",targetlib))
-#             tmp.flush()
-#             target_dir = self.mysql_etc_dir()
-#             galera_config_files = [(tmp.name,os.path.join(target_dir,"galera.cnf"))]
-#             self.copy_to_nodes(galera_config_files,template=True)
-
-
 scenarios = {}
 
 
@@ -96,6 +54,22 @@ class PrepareCluster(RATesterScenarioComponent):
 
     def setup_configs(self, cluster_nodes):
         config = self.Env["config"]
+
+        self.log("Discovering galera paths for config")
+        node = cluster_nodes[0]
+        mysqld = self.rsh(node, "for i in /usr/{libexec,sbin}/mysqld; "
+                          "do if test -x $i; then echo $i; break; fi; done", stdout=1).strip()
+        assert mysqld, "could not determine mysqld path"
+        mysql_etc_file = self.rsh(node, "for i in $(%s --verbose --help 2>/dev/null | grep /etc/my.cnf); "
+                                  "do if test -f $i; then echo $i; break; fi; done" % mysqld, stdout=1).strip()
+        mysql_etc_file, "could not determine default mysql config file"
+        mysql_etc_dir = self.rsh(node, "for i in $(grep includedir %s | cut -d' ' -f2); "
+                                 "do if test -d $i; then echo $i; break; fi; done" % mysql_etc_file, stdout=1).strip()
+        mysql_etc_dir, "could not determine default mysql extra config directory"
+        galera_libpath = self.rsh(node, "for i in /usr/{lib64,lib}/galera/libgalera_smm.so; "
+                                  "do if test -f $i; then echo $i; break; fi; done", stdout=1).strip()
+        galera_libpath, "could not determine galera library path"
+        ratester_mysqlcfg = os.path.join(mysql_etc_dir, "galera.cnf")
 
         self.log("Setting up galera config files")
         basedir=os.path.dirname(os.path.abspath(__file__))
@@ -129,7 +103,7 @@ class PrepareCluster(RATesterScenarioComponent):
                 else:
                     shortname = self.node_shortname(node)
             self.copy_to_node(node,
-                              [(galeracfg, "/etc/my.cnf.d/galera.cnf"),
+                              [(galeracfg, ratester_mysqlcfg),
                                (killgdb,   "/tmp/kill-during-txn.gdb"),
                                (slowsst,   "/tmp/slow_down_sst.sh")],
                               True, "root", "0444", {
@@ -138,7 +112,7 @@ class PrepareCluster(RATesterScenarioComponent):
                                   "%HOSTIP%": ip if not bool(config["ipv6"]) else "[::]",
                                   "%GCOMM%": gcomm,
                                   "%HOSTNAME%": shortname,
-                                  "%GALERALIBPATH%": "/usr/lib64/galera/libgalera_smm.so",
+                                  "%GALERALIBPATH%": galera_libpath,
                                   "%TLS%": tls,
                                   "%RSYNC%": rsync,
                                   "%TLSTUNNEL%": tlstunnel

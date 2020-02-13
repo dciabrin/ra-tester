@@ -30,6 +30,7 @@ deb:
   fence-agents-virsh: fence-agents
   fence-agents-xvm: fence-agents
   mariadb-galera: mariadb-server
+  mariadb-server-galera: mariadb-server-10.3
   galera: galera-3
   galera-dbg: galera-3
   garbd: galera-arbitrator-3
