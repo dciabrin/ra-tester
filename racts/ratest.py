@@ -40,6 +40,10 @@ class ResourceAgentTest(CTSTest, ActionMixin):
         self.name = "GenericRATest"
         self.bg = {}
         self.verbose = self.Env["verbose"]
+        self.distribution = self.Env["distribution"]
+        self.cluster_manager = self.distribution.cluster_manager()
+        self.package_manager = self.distribution.package_manager()
+        self.container_engine = self.distribution.container_engine()
         self.ratemplates = RATemplates()
 
     def setup(self, node):
