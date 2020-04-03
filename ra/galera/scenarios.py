@@ -62,13 +62,13 @@ class PrepareCluster(RATesterScenarioComponent):
         assert mysqld, "could not determine mysqld path"
         mysql_etc_file = self.rsh(node, "for i in $(%s --verbose --help 2>/dev/null | grep /etc/my.cnf); "
                                   "do if test -f $i; then echo $i; break; fi; done" % mysqld, stdout=1).strip()
-        mysql_etc_file, "could not determine default mysql config file"
+        assert mysql_etc_file, "could not determine default mysql config file"
         mysql_etc_dir = self.rsh(node, "for i in $(grep includedir %s | cut -d' ' -f2); "
                                  "do if test -d $i; then echo $i; break; fi; done" % mysql_etc_file, stdout=1).strip()
-        mysql_etc_dir, "could not determine default mysql extra config directory"
+        assert mysql_etc_dir, "could not determine default mysql extra config directory"
         galera_libpath = self.rsh(node, "for i in /usr/{lib64,lib}/galera/libgalera_smm.so; "
                                   "do if test -f $i; then echo $i; break; fi; done", stdout=1).strip()
-        galera_libpath, "could not determine galera library path"
+        assert galera_libpath, "could not determine galera library path"
         ratester_mysqlcfg = os.path.join(mysql_etc_dir, "galera.cnf")
 
         self.log("Setting up galera config files")
