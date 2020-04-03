@@ -50,7 +50,7 @@ scenarios = {}
 class PrepareCluster(RATesterScenarioComponent):
     def __init__(self, environment):
         RATesterScenarioComponent.__init__(self, environment, scenario_module_name="galera")
-        self.dependencies = ["mariadb-server-galera"]
+        self.dependencies = ["mariadb-server-galera", "socat"]
 
     def setup_configs(self, cluster_nodes):
         config = self.Env["config"]
