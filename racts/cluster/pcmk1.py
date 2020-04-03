@@ -41,3 +41,7 @@ class Pacemaker1(ClusterManager, ActionMixin):
         if max_clones:
             res = "master-max=%d " % max_clones + res
         return res
+
+    @property
+    def attribute_absent_errno(self):
+        return 6
