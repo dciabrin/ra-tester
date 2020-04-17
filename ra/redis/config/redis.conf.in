@@ -1,0 +1,10 @@
+daemonize no
+bind %HOSTIP%
+port 6379
+pidfile /var/run/redis/redis.pid
+unixsocket /var/run/redis/redis.sock
+dir /var/lib/redis
+logfile /var/log/redis/redis.log
+masterauth ratester
+requirepass ratester
+dbfilename dump.rdb
