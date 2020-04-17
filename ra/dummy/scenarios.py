@@ -6,7 +6,7 @@ Template scenarios definition for resource agent
  '''
 
 __copyright__ = '''
-Copyright (C) 2018 Damien Ciabrini <dciabrin@redhat.com>
+Copyright (C) 2018-2020 Damien Ciabrini <dciabrin@redhat.com>
 Licensed under the GNU GPL.
 '''
 
@@ -26,25 +26,26 @@ Licensed under the GNU GPL.
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 
 
-import sys, signal, time, os, re, string, subprocess, tempfile
-from stat import *
-from cts import CTS
-from cts.CTS import CtsLab
-from cts.CTStests import CTSTest
-from cts.CTSscenarios import *
-from cts.CTSaudits import *
-from cts.CTSvars   import *
-from cts.patterns  import PatternSelector
-from cts.logging   import LogFactory
-from cts.remote    import RemoteFactory
-from cts.watcher   import LogWatcher
-from cts.environment import EnvFactory
+# import sys, signal, time, os, re, string, subprocess, tempfile
+# from stat import *
+# from cts import CTS
+# from cts.CTS import CtsLab
+# from cts.CTStests import CTSTest
+# from cts.CTSscenarios import *
+# from cts.CTSaudits import *
+# from cts.CTSvars   import *
+# from cts.patterns  import PatternSelector
+# from cts.logging   import LogFactory
+# from cts.remote    import RemoteFactory
+# from cts.watcher   import LogWatcher
+# from cts.environment import EnvFactory
 
 from racts.rascenario import RATesterScenarioComponent
 from racts.raconfig import RAConfig
 
 
 scenarios = {}
+
 
 class PrepareCluster(RATesterScenarioComponent):
     def __init__(self, environment):
@@ -65,9 +66,10 @@ class SimpleSetup(PrepareCluster):
             "bundle": None
         })
         self.Env["config"] = config
-        PrepareCluster.setup_scenario(self,cm)
+        PrepareCluster.setup_scenario(self, cm)
 
-scenarios["SimpleSetup"]=[SimpleSetup]
+
+scenarios["SimpleSetup"] = [SimpleSetup]
 
 
 class BundleSetup(PrepareCluster):
@@ -81,6 +83,7 @@ class BundleSetup(PrepareCluster):
             "container_image": "docker.io/tripleoqueens/centos-binary-mariadb:current-tripleo-rdo"
         })
         self.Env["config"] = config
-        PrepareCluster.setup_scenario(self,cm)
+        PrepareCluster.setup_scenario(self, cm)
 
-scenarios["BundleSetup"]=[BundleSetup]
+
+scenarios["BundleSetup"] = [BundleSetup]

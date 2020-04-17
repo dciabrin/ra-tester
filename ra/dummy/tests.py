@@ -6,7 +6,7 @@ Simple test example on the Dummy RA.
  '''
 
 __copyright__ = '''
-Copyright (C) 2018-2019 Damien Ciabrini <dciabrin@redhat.com>
+Copyright (C) 2018-2020 Damien Ciabrini <dciabrin@redhat.com>
 Licensed under the GNU GPL.
 '''
 
@@ -26,23 +26,25 @@ Licensed under the GNU GPL.
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 
 
-import sys, signal, time, os, re, string, subprocess, tempfile
-from stat import *
-from cts import CTS
-from cts.CTS import CtsLab
-from cts.CTStests import CTSTest
-from cts.CTSscenarios import *
-from cts.CTSaudits import *
-from cts.CTSvars   import *
-from cts.patterns  import PatternSelector
-from cts.logging   import LogFactory
-from cts.remote    import RemoteFactory
-from cts.watcher   import LogWatcher
-from cts.environment import EnvFactory
+# import sys, signal, time, os, re, string, subprocess, tempfile
+# from stat import *
+# from cts import CTS
+# from cts.CTS import CtsLab
+# from cts.CTStests import CTSTest
+# from cts.CTSscenarios import *
+# from cts.CTSaudits import *
+# from cts.CTSvars   import *
+# from cts.patterns  import PatternSelector
+# from cts.logging   import LogFactory
+# from cts.remote    import RemoteFactory
+# from cts.watcher   import LogWatcher
+# from cts.environment import EnvFactory
 
 from racts.ratest import ResourceAgentTest
 
+
 tests = []
+
 
 class DummyCommonTest(ResourceAgentTest):
     def bundle_command(self, cluster_nodes, config):
@@ -53,7 +55,7 @@ class DummyCommonTest(ResourceAgentTest):
             " container %s image=%s network=host options=\"--user=root --log-driver=journald\""\
             " run-command=\"/usr/sbin/pacemaker_remoted\" network control-port=3123"\
             " storage-map id=map0 source-dir=/dev/log target-dir=/dev/log"\
-            " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro"%\
+            " storage-map id=map1 source-dir=/dev/zero target-dir=/etc/libqb/force-filesystem-sockets options=ro" %\
             (name, engine, image)
 
     def resource_command(self, cluster_nodes, config):
@@ -69,11 +71,10 @@ class DummyCommonTest(ResourceAgentTest):
         return ResourceAgentTest.errorstoignore(self)
 
 
-
 class Start(DummyCommonTest):
     '''Start a dummy resource'''
     def __init__(self, cm):
-        DummyCommonTest.__init__(self,cm)
+        DummyCommonTest.__init__(self, cm)
         self.name = "Start"
 
     def test(self, target):
@@ -84,23 +85,24 @@ class Start(DummyCommonTest):
         rsc = self.Env["config"]
         patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe",
                                            self.resource_probe_pattern(rsc, n),
-                                           n, 'not running') \
+                                           n, 'not running')
                     for n in self.Env["nodes"]]
         watch = self.make_watch(patterns)
-        self.rsh_check(target, "pcs resource refresh %s"%rsc["name"])
+        self.rsh_check(target, "pcs resource refresh %s" % rsc["name"])
         watch.lookforall()
         assert not watch.unmatched, watch.unmatched
 
         # bundles run OCF resources on bundle nodes, not host nodes
         name = rsc["ocf_name"]
         target_nodes = self.resource_target_nodes(rsc, self.Env["nodes"])
-        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok') \
+        patterns = [self.ratemplates.build("Pat:RscRemoteOp", "start", name, n, 'ok')
                     for n in target_nodes]
         watch = self.make_watch(patterns)
-        self.rsh_check(target, "pcs resource enable %s"%rsc["name"])
+        self.rsh_check(target, "pcs resource enable %s" % rsc["name"])
         watch.look()
         assert not watch.unmatched, watch.unmatched
 
         # teardown_test will delete the resource
+
 
 tests.append(Start)
