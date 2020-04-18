@@ -42,6 +42,14 @@ class Pacemaker1(ClusterManager, ActionMixin):
             res = "master-max=%d " % max_clones + res
         return res
 
+    def errorstoignore(self):
+        return [
+            # during cluster setup, prior to configuring fencing, pacemaker logs harmless errors
+            r"pengine.*:\s*error: Resource start-up disabled since no STONITH resources have been defined",
+            r"pengine.*:\s*error: Either configure some or disable STONITH with the stonith-enabled option",
+            r"pengine.*:\s*error: NOTE: Clusters with shared data need STONITH to ensure data integrity"
+        ]
+
     @property
     def attribute_absent_errno(self):
         return 6

@@ -33,6 +33,10 @@ class ClusterManager(ABC):
     def meta_promotable_config(self, max_clones=None):
         pass
 
+    @abstractmethod
+    def errorstoignore(self):
+        pass
+
     @property
     @abstractmethod
     def attribute_absent_errno(self):
