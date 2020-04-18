@@ -209,7 +209,7 @@ class RATesterScenarioComponent(ScenarioComponent):
         # container setup
         if bool(self.Env["config"]["bundle"]):
             registry = self.Env["container_insecure_registry"]
-            if registry:
+            if registry and not self.Env.has_key("skip_container_configure_registry"):
                 for node in self.Env["nodes"]:
                     if self.verbose:
                         self.log("[Configuring insecure registry %s on %s]" %
