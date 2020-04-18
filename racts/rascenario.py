@@ -6,7 +6,7 @@ ScenarioComponent utilities and base classes, extends Pacemaker's CTS
  '''
 
 __copyright__ = '''
-Copyright (C) 2015-2018 Damien Ciabrini <dciabrin@redhat.com>
+Copyright (C) 2015-2020 Damien Ciabrini <dciabrin@redhat.com>
 Licensed under the GNU GPL.
 '''
 
@@ -195,7 +195,8 @@ class RATesterScenarioComponent(ScenarioComponent):
         # by audit. But in ratester, our "scenario" setup runs various
         # operations that could trigger bad logs in audit.
         # So tell CTS to ignore logs before tests as well.
-        ignored_logs = self.Env["distribution"].container_engine().errorstoignore()
+        ignored_logs = self.cluster_manager.errorstoignore() +\
+                       self.container_engine.errorstoignore()
         cluster_manager._ClusterManager__instance_errorstoignore.extend(ignored_logs)
 
         # install package pre-requisites
@@ -233,7 +234,14 @@ class RATesterScenarioComponent(ScenarioComponent):
         pass
 
     def setup_new_cluster(self, cluster_manager):
-        # cleanup previous galera state on disk
+        # stop cluster if previously running, failure is not fatal
+        for node in self.Env["nodes"]:
+            self.logger.log("destroy any existing cluster on node %s" % node)
+            self.rsh(node, "pcs cluster destroy")
+            self.rsh(node, "systemctl stop pacemaker_remote")
+            self.rsh(node, "systemctl disable pacemaker_remote")
+
+        # recreate any config or state that is required for the resource
         for cluster in self.Env["clusters"]:
             self.setup_configs(cluster)
             self.setup_state(cluster)
@@ -284,19 +292,24 @@ class RATesterScenarioComponent(ScenarioComponent):
                 # patterns = [r"(crmd|pacemaker-controld).*:\s*Initiating action.*: probe_complete probe_complete-%s on %s"%(n,n) \
                 #         for n in self.Env["nodes"]]
                 resource_pattern = re.sub(r'-(master|clone|bundle)', '', res_name)
-                if self.Env["bundle"]:
-                    resource_pattern += '-bundle-%s-[0-9]' % self.Env["container_engine"]
+                if self.Env["config"]["bundle"]:
+                    resource_pattern += '-bundle-%s-[0-9]' % self.container_engine.package_name()
 
                 patterns = [self.ratemplates.build("Pat:RscRemoteOp", "probe", resource_pattern, n, '.*')
                             for n in cluster]
                 watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
                 watch.setwatch()
-                self.rsh(target, "pcs resource refresh %s" % res_name)
+                self.rsh_check(target, "pcs resource refresh %s" % res_name)
                 watch.lookforall()
                 assert not watch.unmatched, watch.unmatched
-                self.rsh(target, "pcs resource disable %s" % res_name)
-                self.rsh(target, "pcs resource manage %s" % res_name)
-                self.rsh(target, "pcs resource delete %s --wait" % res_name)
+                self.rsh_check(target, "pcs resource disable %s" % res_name)
+                self.rsh_check(target, "pcs resource manage %s" % res_name)
+
+                patterns = ['Initiating delete operation %s.*on%s' % (res_name, n) for n in cluster]
+                watch = LogWatcher(self.Env["LogFileName"], patterns, None, self.Env["DeadTime"], kind=self.Env["LogWatcher"], hosts=cluster)
+                watch.setwatch()
+                self.rsh_check(target, "pcs resource delete %s" % res_name)
+                watch.lookforall()
 
     def teardown_scenario(self, cluster_manager):
         cluster_manager.log("Leaving cluster running on all nodes")
