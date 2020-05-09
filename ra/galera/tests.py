@@ -26,7 +26,6 @@ Licensed under the GNU GPL.
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 
-
 import sys, signal, time, os, re, string, subprocess, tempfile
 from stat import *
 from cts import CTS
@@ -249,6 +248,7 @@ class ClusterStop(ClusterStart):
     def test(self, dummy):
         # start cluster
         ClusterStart.test(self,dummy)
+        cluster = self.cluster_manager
         config=self.Env["config"]
         target_nodes=self.Env["nodes"]
         ## bundles run resources on container nodes, not host nodes
@@ -263,11 +263,11 @@ class ClusterStop(ClusterStart):
 
         # ensure all things are cleaned up after stop
         for target in self.Env["nodes"]:
-            self.crm_attr_check(target, "master-galera", expected = 6)
-            self.crm_attr_check(target, "galera-last-committed", expected = 6)
-            self.crm_attr_check(target, "galera-bootstrap", expected = 6)
-            self.crm_attr_check(target, "galera-sync-needed", expected = 6)
-            self.crm_attr_check(target, "galera-no-grastate", expected = 6)
+            self.crm_attr_check(target, "master-galera", expected=cluster.attribute_absent_errno)
+            self.crm_attr_check(target, "galera-last-committed", expected=cluster.attribute_absent_errno)
+            self.crm_attr_check(target, "galera-bootstrap", expected=cluster.attribute_absent_errno)
+            self.crm_attr_check(target, "galera-sync-needed", expected=cluster.attribute_absent_errno)
+            self.crm_attr_check(target, "galera-no-grastate", expected=cluster.attribute_absent_errno)
 
 tests.append(ClusterStop)
 
@@ -283,6 +283,7 @@ class ClusterBootWithoutGrastateOnDisk(ClusterStart):
     def test(self, target):
         for n in self.Env["nodes"]:
             self.rsh_check(n, "rm -f /var/lib/mysql/grastate.dat")
+        cluster = self.cluster_manager
 
         # The bootstrap node selection is an ordered process,
         # if all nodes are in sync, node3 shall be selected.
@@ -294,7 +295,7 @@ class ClusterBootWithoutGrastateOnDisk(ClusterStart):
         assert not watch.unmatched, watch.unmatched
         # the transient boot state tracking attribute should be cleared
         for n in self.Env["nodes"]:
-            self.crm_attr_check(n, "galera-no-grastate", expected = 6)
+            self.crm_attr_check(n, "galera-no-grastate", expected=cluster.attribute_absent_errno)
 
 tests.append(ClusterBootWithoutGrastateOnDisk)
 
@@ -349,8 +350,9 @@ class ClusterRestartAfter2RecoveredNodes(ClusterStart):
         assert not watch.unmatched, watch.unmatched
 
         # ensure recovered state is cleaned up
+        cluster = self.cluster_manager
         for node in to_break:
-            self.crm_attr_check(node, "galera-no-grastate", expected = 6)
+            self.crm_attr_check(node, "galera-no-grastate", expected=cluster.attribute_absent_errno)
 
     def errorstoignore(self):
         return GaleraCommonTest.errorstoignore(self) + \
@@ -400,8 +402,9 @@ class ClusterRestartAfterAllNodesRecovered(ClusterStart):
         assert not watch.unmatched, watch.unmatched
 
         # ensure recovered state is cleaned up
+        cluster = self.cluster_manager
         for node in all_nodes:
-            self.crm_attr_check(node, "galera-no-grastate", expected = 6)
+            self.crm_attr_check(node, "galera-no-grastate", expected=cluster.attribute_absent_errno)
 
     def errorstoignore(self):
         return GaleraCommonTest.errorstoignore(self) + \
