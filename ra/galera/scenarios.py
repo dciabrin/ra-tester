@@ -85,6 +85,13 @@ class PrepareCluster(RATesterScenarioComponent):
             tlstunnel=""
             tls=""
             rsync="rsync"
+        if bool(config["mariabackup"]):
+            rsync="mariabackup"
+            tlstunnel="[sst]"
+            if bool(config["tls"]):
+                tlstunnel+="\ntca=/tls/all-mysql.crt\ntcert=/tls/mysql.pem\nencrypt=2"
+            if bool(config["ipv6"]):
+                tlstunnel+="\nsockopt=\",pf=ip6\""
         if bool(config["ipv6"]):
             gcomm="gcomm://"+(",".join([self.node_fqdn_ipv6(n) for n in cluster_nodes]))
         elif bool(config["tls"]):
@@ -157,6 +164,9 @@ class PrepareCluster(RATesterScenarioComponent):
                 self.rsh(node, "which chcon && chcon -R -t container_file_t /var/lib/mysql /var/log/mysql")
             else:
                 self.rsh(node, "which restorecon && restorecon -R /var/lib/mysql /var/log/mysql")
+            if bool(config["mariabackup"]):
+                self.log("Creating mariabackup user in DB on node %s"%node)
+                self.rsh(node, "mysqld_safe  --skip-networking --wsrep-provider=none & timeout 20 bash -c \"until mysqladmin ping 2>/dev/null; do sleep 1; done\"; mysql -e \"CREATE USER 'mariabackup'@'localhost' IDENTIFIED BY 'ratester'; GRANT RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'mariabackup'@'localhost';\"; mysqladmin shutdown")
 
 
 # The scenario below set up various configuration of the galera tests
@@ -175,6 +185,7 @@ class SimpleSetup(PrepareCluster):
             "skip_install_db": False,
             "tls": False,
             "ipv6": False,
+            "mariabackup": False,
         })
         if bool(config["ipv6"]):
             nodes = self.Env["nodes"]
@@ -200,6 +211,7 @@ class BundleSetup(PrepareCluster):
             "skip_install_db": False,
             "tls": False,
             "ipv6": False,
+            "mariabackup": False,
         })
         if bool(config["ipv6"]):
             nodes = self.Env["nodes"]
@@ -226,6 +238,7 @@ class TLSSetup(PrepareCluster):
             "skip_install_db": False,
             "tls": True,
             "ipv6": False,
+            "mariabackup": False,
         })
         nodes = self.Env["nodes"]
         if bool(config["ipv6"]):
