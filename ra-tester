@@ -37,8 +37,7 @@ import traceback
 import os
 
 from cts.CTS import CtsLab
-# from cts.CM_ais import crm_mcp
-from cts.CM_common import crm_common
+from cts.CM_corosync import crm_corosync
 from cts.CTSaudits import AuditList, LogAudit
 from cts.logging   import LogFactory
 from cts.remote    import AsyncRemoteCmd, RemoteExec, RemoteFactory
@@ -223,7 +222,7 @@ if __name__ == '__main__':
     ratester_env, cts_args = parse_ratester_args(sys.argv[1:])
     env = CtsLab(["--stonith","no"]+cts_args)
     inject_ratester_env(ratester_env, env)
-    cluster_manager = crm_common(env)
+    cluster_manager = crm_corosync(env)
     log=LogFactory()
     log.add_stderr()
 
