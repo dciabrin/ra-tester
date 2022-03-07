@@ -15,7 +15,7 @@ class BuildPyCommand(setuptools.command.build_py.build_py):
             '@CRM_DAEMON_DIR@': '/usr/libexec/pacemaker',
             '@OCF_ROOT_DIR@': '/usr/lib/ocf'
         }
-        for i in glob.glob("cts/*.py.in"):
+        for i in glob.glob("cts/lab/*.py.in"):
             with open(i, 'r') as inf, open(i[:-3], 'w') as outf:
                 for l in inf.readlines():
                     for k,v in rules.items():
@@ -31,6 +31,7 @@ setup(name = 'cts',
       author = 'Pacemaker project contributors',
       license = 'GPLv2',
       packages = ['cts'],
+      package_dir = {'cts': 'cts/lab'},
       cmdclass = {
           'build_py': BuildPyCommand,
       },
